@@ -9,6 +9,7 @@ import '../../services/food_log_service.dart';
 import '../../services/user_service.dart';
 import '../../models/food_log_model.dart';
 import '../food_search/food_search_screen.dart';
+import '../settings/settings_screen.dart';
 
 class LoggingScreen extends ConsumerStatefulWidget {
   const LoggingScreen({super.key});
@@ -198,7 +199,24 @@ class _LoggingScreenState extends ConsumerState<LoggingScreen> {
             else if (_error != null)
               Padding(
                 padding: const EdgeInsets.only(top: 24),
-                child: Text(_error!, style: const TextStyle(color: Colors.red)),
+                child: Column(
+                  children: [
+                    Text(_error!, style: const TextStyle(color: Colors.red), textAlign: TextAlign.center),
+                    if (_error!.contains('API Key'))
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                            );
+                          },
+                          child: const Text('Go to Settings'),
+                        ),
+                      ),
+                  ],
+                ),
               )
             else if (_aiResult != null)
               Padding(

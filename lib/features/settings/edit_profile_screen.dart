@@ -89,9 +89,12 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 const SizedBox(width: 16),
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    value: _gender,
+                    value: _gender.toLowerCase(),
                     decoration: const InputDecoration(labelText: 'Gender', border: OutlineInputBorder()),
-                    items: ['Male', 'Female'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                    items: const [
+                      DropdownMenuItem(value: 'male', child: Text('Male')),
+                      DropdownMenuItem(value: 'female', child: Text('Female')),
+                    ],
                     onChanged: (v) => setState(() => _gender = v!),
                   ),
                 ),
@@ -123,22 +126,29 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             const SizedBox(height: 24),
             _buildSectionHeader('Activity & Goals', theme),
             DropdownButtonFormField<String>(
-              value: _activityLevel,
+              value: _activityLevel.toLowerCase() == 'sedentary' ? 'sedentary' : 
+                     _activityLevel.toLowerCase() == 'light' ? 'light' :
+                     _activityLevel.toLowerCase() == 'moderate' ? 'moderate' :
+                     _activityLevel.toLowerCase() == 'active' ? 'active' : 'very_active',
               decoration: const InputDecoration(labelText: 'Activity Level', border: OutlineInputBorder()),
-              items: [
-                'Sedentary',
-                'Lightly Active',
-                'Moderately Active',
-                'Very Active',
-                'Extra Active'
-              ].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+              items: const [
+                DropdownMenuItem(value: 'sedentary', child: Text('Sedentary')),
+                DropdownMenuItem(value: 'light', child: Text('Lightly Active')),
+                DropdownMenuItem(value: 'moderate', child: Text('Moderately Active')),
+                DropdownMenuItem(value: 'active', child: Text('Active')),
+                DropdownMenuItem(value: 'very_active', child: Text('Very Active')),
+              ],
               onChanged: (v) => setState(() => _activityLevel = v!),
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-              value: _goal,
+              value: _goal.toLowerCase(),
               decoration: const InputDecoration(labelText: 'Goal', border: OutlineInputBorder()),
-              items: ['Lose', 'Maintain', 'Gain'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+              items: const [
+                DropdownMenuItem(value: 'lose', child: Text('Lose Weight')),
+                DropdownMenuItem(value: 'maintain', child: Text('Maintain Weight')),
+                DropdownMenuItem(value: 'gain', child: Text('Gain Muscle')),
+              ],
               onChanged: (v) => setState(() => _goal = v!),
             ),
 

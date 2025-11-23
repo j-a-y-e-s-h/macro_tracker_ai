@@ -13,7 +13,7 @@ dependencies:
   flutter_riverpod: ^2.5.1
   riverpod_annotation: ^2.3.5
   go_router: ^14.0.0
-  google_generative_ai: ^0.4.0
+  google_generative_ai: ^0.4.6
   http: ^1.1.0
   shared_preferences: ^2.2.3
   image_picker: ^1.0.7

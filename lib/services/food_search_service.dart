@@ -1,7 +1,18 @@
 import 'package:openfoodfacts/openfoodfacts.dart';
 
 class FoodSearchService {
+  FoodSearchService() {
+    _initUserAgent();
+  }
+
+  void _initUserAgent() {
+    OpenFoodAPIConfiguration.userAgent = UserAgent(
+      name: 'MacroMate',
+      url: 'https://github.com/macromate',
+    );
+  }
   Future<List<Product>> searchProducts(String query) async {
+    _initUserAgent(); // Ensure it's set
     if (query.isEmpty) return [];
 
     final configuration = ProductSearchQueryConfiguration(

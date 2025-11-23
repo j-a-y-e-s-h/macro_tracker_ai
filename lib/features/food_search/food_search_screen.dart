@@ -34,13 +34,17 @@ class _FoodSearchScreenState extends ConsumerState<FoodSearchScreen> {
 
     try {
       final results = await _foodSearchService.searchProducts(query);
+      if (!mounted) return;
       setState(() {
         _searchResults = results;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _error = 'Search failed: $e');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -164,20 +168,22 @@ class _FoodSearchScreenState extends ConsumerState<FoodSearchScreen> {
               child: Text(_error!, style: const TextStyle(color: Colors.red)),
             ),
           Expanded(
-            child: ListView.builder(
-              itemCount: _searchResults.length,
-              itemBuilder: (context, index) {
-                final product = _searchResults[index];
-                return ListTile(
-                  leading: product.imageFrontSmallUrl != null
-                      ? Image.network(product.imageFrontSmallUrl!, width: 50, height: 50, errorBuilder: (c,e,s) => const Icon(Icons.fastfood))
-                      : const Icon(Icons.fastfood),
-                  title: Text(product.productName ?? 'Unknown'),
-                  subtitle: Text(product.brands ?? ''),
-                  onTap: () => _addFoodLog(product),
-                );
-              },
-            ),
+            child: _searchResults.isEmpty && !_isLoading && _searchController.text.isNotEmpty
+                ? const Center(child: Text('No products found. Try a different term.'))
+                : ListView.builder(
+                    itemCount: _searchResults.length,
+                    itemBuilder: (context, index) {
+                      final product = _searchResults[index];
+                      return ListTile(
+                        leading: product.imageFrontSmallUrl != null
+                            ? Image.network(product.imageFrontSmallUrl!, width: 50, height: 50, errorBuilder: (c,e,s) => const Icon(Icons.fastfood))
+                            : const Icon(Icons.fastfood),
+                        title: Text(product.productName ?? 'Unknown', style: const TextStyle(color: Colors.white)),
+                        subtitle: Text(product.brands ?? '', style: const TextStyle(color: Colors.grey)),
+                        onTap: () => _addFoodLog(product),
+                      );
+                    },
+                  ),
           ),
         ],
       ),

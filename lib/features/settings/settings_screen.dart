@@ -13,7 +13,10 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _geminiKeyController = TextEditingController();
   final _chatgptKeyController = TextEditingController();
-  bool _useGemini = true;
+  String _aiProvider = 'gemini';
+  String _chatgptModel = 'gpt-4o';
+  String _geminiModel = 'gemini-1.5-flash';
+  bool _isValidating = false;
 
   @override
   void initState() {
@@ -25,35 +28,82 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final aiService = ref.read(aiServiceProvider);
     final geminiKey = await aiService.getGeminiKey();
     final chatgptKey = await aiService.getChatGPTKey();
-    final useGemini = await aiService.shouldUseGemini();
+    final provider = await aiService.getAIProvider();
+    final chatgptModel = await aiService.getChatGPTModel();
+    final geminiModel = await aiService.getGeminiModel();
     
     setState(() {
       _geminiKeyController.text = geminiKey ?? '';
       _chatgptKeyController.text = chatgptKey ?? '';
-      _useGemini = useGemini;
+      _aiProvider = provider;
+      _chatgptModel = chatgptModel;
+      _geminiModel = geminiModel;
     });
   }
 
   Future<void> _saveKeys() async {
+    setState(() => _isValidating = true);
     final aiService = ref.read(aiServiceProvider);
     
-    if (_geminiKeyController.text.trim().isNotEmpty) {
-      await aiService.saveGeminiKey(_geminiKeyController.text.trim());
-    }
-    
-    if (_chatgptKeyController.text.trim().isNotEmpty) {
-      await aiService.saveChatGPTKey(_chatgptKeyController.text.trim());
-    }
-    
-    await aiService.setUseGemini(_useGemini);
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('API Keys Saved Successfully!'),
-          backgroundColor: Color(0xFF00D9C0),
-        ),
-      );
+    try {
+      // Save keys first
+      if (_geminiKeyController.text.trim().isNotEmpty) {
+        await aiService.saveGeminiKey(_geminiKeyController.text.trim());
+      }
+      if (_chatgptKeyController.text.trim().isNotEmpty) {
+        await aiService.saveChatGPTKey(_chatgptKeyController.text.trim());
+      }
+
+      // Validate and set provider
+      await aiService.setAIProvider(_aiProvider);
+      await aiService.setChatGPTModel(_chatgptModel);
+      await aiService.setGeminiModel(_geminiModel);
+
+      // Smart Validation: Check if the selected configuration works
+      String workingModel = '';
+      if (_aiProvider == 'gemini') {
+        workingModel = await aiService.validateApiKey('gemini', _geminiKeyController.text.trim());
+        if (workingModel != _geminiModel) {
+           await aiService.setGeminiModel(workingModel);
+           setState(() => _geminiModel = workingModel);
+           if (mounted) {
+             ScaffoldMessenger.of(context).showSnackBar(
+               SnackBar(content: Text('Selected model failed. Auto-switched to working model: $workingModel')),
+             );
+           }
+        }
+      } else {
+        workingModel = await aiService.validateApiKey('chatgpt', _chatgptKeyController.text.trim());
+        if (workingModel != _chatgptModel) {
+           await aiService.setChatGPTModel(workingModel);
+           setState(() => _chatgptModel = workingModel);
+           if (mounted) {
+             ScaffoldMessenger.of(context).showSnackBar(
+               SnackBar(content: Text('Selected model failed. Auto-switched to working model: $workingModel')),
+             );
+           }
+        }
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Settings Saved & Verified!'),
+            backgroundColor: Color(0xFF00D9C0),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isValidating = false);
     }
   }
 
@@ -80,7 +130,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Configure your AI providers for food logging',
+              'Configure your AI providers. The app will automatically find the best working model if your selection fails.',
               style: TextStyle(color: Color(0xFF888888), fontSize: 14),
             ),
             const SizedBox(height: 24),
@@ -104,25 +154,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  Row(
+                  Column(
                     children: [
-                      Expanded(
-                        child: RadioListTile<bool>(
-                          title: const Text('Gemini', style: TextStyle(color: Colors.white)),
-                          value: true,
-                          groupValue: _useGemini,
-                          onChanged: (val) => setState(() => _useGemini = val!),
-                          activeColor: const Color(0xFF00D9C0),
-                        ),
+                      RadioListTile<String>(
+                        title: const Text('Gemini (Google)', style: TextStyle(color: Colors.white)),
+                        value: 'gemini',
+                        groupValue: _aiProvider,
+                        onChanged: (val) => setState(() => _aiProvider = val!),
+                        activeColor: const Color(0xFF00D9C0),
                       ),
-                      Expanded(
-                        child: RadioListTile<bool>(
-                          title: const Text('ChatGPT', style: TextStyle(color: Colors.white)),
-                          value: false,
-                          groupValue: _useGemini,
-                          onChanged: (val) => setState(() => _useGemini = val!),
-                          activeColor: const Color(0xFF00D9C0),
-                        ),
+                      RadioListTile<String>(
+                        title: const Text('ChatGPT (OpenAI)', style: TextStyle(color: Colors.white)),
+                        value: 'chatgpt',
+                        groupValue: _aiProvider,
+                        onChanged: (val) => setState(() => _aiProvider = val!),
+                        activeColor: const Color(0xFF00D9C0),
                       ),
                     ],
                   ),
@@ -131,62 +177,106 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
             const SizedBox(height: 24),
 
-            // Gemini API Key
-            const Text(
-              'Gemini API Key',
-              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Get your free API key from makersuite.google.com',
-              style: TextStyle(color: Color(0xFF888888), fontSize: 12),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _geminiKeyController,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                hintText: 'Enter Gemini API Key',
-                hintStyle: const TextStyle(color: Color(0xFF888888)),
-                filled: true,
-                fillColor: const Color(0xFF1A1A1A),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                prefixIcon: const Icon(Icons.key, color: Color(0xFF00D9C0)),
+            // Gemini Configuration
+            if (_aiProvider == 'gemini') ...[
+              const Text(
+                'Gemini API Key',
+                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
               ),
-              obscureText: true,
-            ),
-            const SizedBox(height: 24),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _geminiKeyController,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: 'Enter Gemini API Key',
+                  hintStyle: const TextStyle(color: Color(0xFF888888)),
+                  filled: true,
+                  fillColor: const Color(0xFF1A1A1A),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  prefixIcon: const Icon(Icons.key, color: Color(0xFF00D9C0)),
+                ),
+                obscureText: true,
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Gemini Model',
+                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1A1A1A),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: AIService.geminiModels.contains(_geminiModel) ? _geminiModel : AIService.geminiModels.last,
+                    isExpanded: true,
+                    dropdownColor: const Color(0xFF1A1A1A),
+                    style: const TextStyle(color: Colors.white),
+                    items: AIService.geminiModels.map((model) {
+                      return DropdownMenuItem(value: model, child: Text(model));
+                    }).toList(),
+                    onChanged: (v) => setState(() => _geminiModel = v!),
+                  ),
+                ),
+              ),
+            ],
 
-            // ChatGPT API Key
-            const Text(
-              'ChatGPT API Key (Fallback)',
-              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Get your API key from platform.openai.com',
-              style: TextStyle(color: Color(0xFF888888), fontSize: 12),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _chatgptKeyController,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                hintText: 'Enter ChatGPT API Key',
-                hintStyle: const TextStyle(color: Color(0xFF888888)),
-                filled: true,
-                fillColor: const Color(0xFF1A1A1A),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                prefixIcon: const Icon(Icons.key, color: Color(0xFF00D9C0)),
+            // ChatGPT Configuration
+            if (_aiProvider == 'chatgpt') ...[
+              const Text(
+                'ChatGPT API Key',
+                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
               ),
-              obscureText: true,
-            ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _chatgptKeyController,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: 'Enter ChatGPT API Key',
+                  hintStyle: const TextStyle(color: Color(0xFF888888)),
+                  filled: true,
+                  fillColor: const Color(0xFF1A1A1A),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  prefixIcon: const Icon(Icons.key, color: Color(0xFF00D9C0)),
+                ),
+                obscureText: true,
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'ChatGPT Model',
+                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1A1A1A),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: AIService.chatgptModels.contains(_chatgptModel) ? _chatgptModel : AIService.chatgptModels.last,
+                    isExpanded: true,
+                    dropdownColor: const Color(0xFF1A1A1A),
+                    style: const TextStyle(color: Colors.white),
+                    items: AIService.chatgptModels.map((model) {
+                      return DropdownMenuItem(value: model, child: Text(model));
+                    }).toList(),
+                    onChanged: (v) => setState(() => _chatgptModel = v!),
+                  ),
+                ),
+              ),
+            ],
+
             const SizedBox(height: 32),
 
             // Save Button
@@ -194,7 +284,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
-                onPressed: _saveKeys,
+                onPressed: _isValidating ? null : _saveKeys,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF00D9C0),
                   foregroundColor: Colors.black,
@@ -202,10 +292,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: const Text(
-                  'Save Settings',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
+                child: _isValidating 
+                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.black))
+                  : const Text(
+                      'Save & Verify Settings',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
               ),
             ),
           ],

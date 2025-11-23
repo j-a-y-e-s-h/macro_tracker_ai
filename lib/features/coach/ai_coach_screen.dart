@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../services/gemini_service.dart';
+import '../../providers/ai_provider.dart';
 import '../../services/user_service.dart';
 
 class AICoachScreen extends ConsumerStatefulWidget {
@@ -53,7 +53,7 @@ class _AICoachScreenState extends ConsumerState<AICoachScreen> {
       // WAIT: I should update GeminiService to support chat. 
       // I'll write this file assuming GeminiService has a `chat` method.
       
-      final response = await ref.read(geminiServiceProvider).chat(prompt);
+      final response = await ref.read(aiServiceProvider).chat(prompt);
       
       setState(() {
         _messages.add({'role': 'ai', 'content': response});

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../services/user_service.dart';
+import '../main_navigation.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
@@ -131,8 +132,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         goal: _goal,
       );
       
-      // Navigate to Dashboard (will implement router later)
-      // context.go('/dashboard');
+      // Navigate to Dashboard
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const MainNavigation()),
+        );
+      }
     }
   }
 }
