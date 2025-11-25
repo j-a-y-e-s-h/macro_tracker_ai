@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
+import 'package:intl/intl.dart';
 import '../../services/user_service.dart';
 import '../../services/food_log_service.dart';
 import '../../models/food_log_model.dart';
+import '../../core/theme/app_theme.dart';
 
 class QuickAddMacrosScreen extends ConsumerStatefulWidget {
   const QuickAddMacrosScreen({super.key});
@@ -18,6 +20,9 @@ class _QuickAddMacrosScreenState extends ConsumerState<QuickAddMacrosScreen> {
   final _proteinController = TextEditingController();
   final _carbsController = TextEditingController();
   final _fatController = TextEditingController();
+  
+  DateTime _selectedDate = DateTime.now();
+  TimeOfDay _selectedTime = TimeOfDay.now();
 
   @override
   void dispose() {
@@ -29,9 +34,65 @@ class _QuickAddMacrosScreenState extends ConsumerState<QuickAddMacrosScreen> {
     super.dispose();
   }
 
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.dark().copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: AppTheme.primary,
+              onPrimary: Colors.white,
+              surface: AppTheme.surface,
+              onSurface: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() => _selectedDate = picked);
+    }
+  }
+
+  Future<void> _pickTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _selectedTime,
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.dark().copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: AppTheme.primary,
+              onPrimary: Colors.white,
+              surface: AppTheme.surface,
+              onSurface: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() => _selectedTime = picked);
+    }
+  }
+
   void _addToLog() {
     final user = ref.read(userServiceProvider);
     if (user == null) return;
+
+    final timestamp = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+      _selectedTime.hour,
+      _selectedTime.minute,
+    );
 
     final log = FoodLog(
       id: const Uuid().v4(),
@@ -41,7 +102,7 @@ class _QuickAddMacrosScreenState extends ConsumerState<QuickAddMacrosScreen> {
       protein: double.tryParse(_proteinController.text) ?? 0,
       carbs: double.tryParse(_carbsController.text) ?? 0,
       fat: double.tryParse(_fatController.text) ?? 0,
-      timestamp: DateTime.now(),
+      timestamp: timestamp,
       isAiGenerated: false,
     );
 
@@ -52,9 +113,9 @@ class _QuickAddMacrosScreenState extends ConsumerState<QuickAddMacrosScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: AppTheme.black,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: AppTheme.black,
         title: const Text('Quick Add Macros'),
       ),
       body: SingleChildScrollView(
@@ -67,9 +128,9 @@ class _QuickAddMacrosScreenState extends ConsumerState<QuickAddMacrosScreen> {
               style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
                 labelText: 'Food Name (Optional)',
-                labelStyle: const TextStyle(color: Color(0xFF94A3B8)),
+                labelStyle: const TextStyle(color: AppTheme.textSecondary),
                 filled: true,
-                fillColor: const Color(0xFF1E293B),
+                fillColor: AppTheme.surface,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
@@ -83,9 +144,9 @@ class _QuickAddMacrosScreenState extends ConsumerState<QuickAddMacrosScreen> {
               style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
                 labelText: 'Calories',
-                labelStyle: const TextStyle(color: Color(0xFF94A3B8)),
+                labelStyle: const TextStyle(color: AppTheme.textSecondary),
                 filled: true,
-                fillColor: const Color(0xFF1E293B),
+                fillColor: AppTheme.surface,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
@@ -95,71 +156,132 @@ class _QuickAddMacrosScreenState extends ConsumerState<QuickAddMacrosScreen> {
             ),
             const SizedBox(height: 16),
 
-            TextField(
-              controller: _proteinController,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                labelText: 'Protein (g)',
-                labelStyle: const TextStyle(color: Color(0xFF94A3B8)),
-                filled: true,
-                fillColor: const Color(0xFF1E293B),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _proteinController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Protein (g)',
+                      labelStyle: const TextStyle(color: AppTheme.textSecondary),
+                      filled: true,
+                      fillColor: AppTheme.surface,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
                 ),
-              ),
-              keyboardType: TextInputType.number,
+                const SizedBox(width: 16),
+                Expanded(
+                  child: TextField(
+                    controller: _carbsController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Carbs (g)',
+                      labelStyle: const TextStyle(color: AppTheme.textSecondary),
+                      filled: true,
+                      fillColor: AppTheme.surface,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: TextField(
+                    controller: _fatController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Fat (g)',
+                      labelStyle: const TextStyle(color: AppTheme.textSecondary),
+                      filled: true,
+                      fillColor: AppTheme.surface,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
 
-            TextField(
-              controller: _carbsController,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                labelText: 'Carbs (g)',
-                labelStyle: const TextStyle(color: Color(0xFF94A3B8)),
-                filled: true,
-                fillColor: const Color(0xFF1E293B),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
+            // Date & Time Selection
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: _pickDate,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: AppTheme.surface,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.calendar_today, size: 16, color: AppTheme.primary),
+                          const SizedBox(width: 8),
+                          Text(
+                            DateFormat('MMM d').format(_selectedDate),
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-              keyboardType: TextInputType.number,
+                const SizedBox(width: 16),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: _pickTime,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: AppTheme.surface,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.access_time, size: 16, color: AppTheme.primary),
+                          const SizedBox(width: 8),
+                          Text(
+                            _selectedTime.format(context),
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
 
-            TextField(
-              controller: _fatController,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                labelText: 'Fat (g)',
-                labelStyle: const TextStyle(color: Color(0xFF94A3B8)),
-                filled: true,
-                fillColor: const Color(0xFF1E293B),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-              keyboardType: TextInputType.number,
-            ),
             const SizedBox(height: 32),
 
             SizedBox(
-              height: 50,
+              height: 56,
               child: ElevatedButton(
                 onPressed: _addToLog,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF14B8A6),
+                  backgroundColor: AppTheme.primary,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(16),
                   ),
                 ),
                 child: const Text(
                   'Add to Diary',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
               ),
             ),

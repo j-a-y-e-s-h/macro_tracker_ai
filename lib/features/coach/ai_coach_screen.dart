@@ -99,7 +99,7 @@ class _AICoachScreenState extends ConsumerState<AICoachScreen> {
                     ),
                     child: Text(
                       msg['content']!,
-                      style: TextStyle(color: Colors.white),
+                      style: const TextStyle(color: Colors.white),
                     ),
                   ),
                 );

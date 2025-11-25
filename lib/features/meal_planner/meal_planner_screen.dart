@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 import '../../services/meal_planner_service.dart';
 import '../../services/user_service.dart';

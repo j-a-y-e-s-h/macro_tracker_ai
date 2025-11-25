@@ -91,7 +91,6 @@ class AIService {
   }
 
   Future<String> _findWorkingGeminiModel(String key) async {
-    // Try the user's selected model first (if any), then iterate through the list
     final selectedModel = await getGeminiModel();
     final modelsToTry = [selectedModel, ...geminiModels.where((m) => m != selectedModel)];
 
@@ -99,7 +98,7 @@ class AIService {
       try {
         final model = GenerativeModel(model: modelName, apiKey: key);
         await model.generateContent([Content.text('Test')]);
-        return modelName; // Found a working model
+        return modelName;
       } catch (e) {
         print('Model $modelName failed: $e');
         continue;
@@ -157,14 +156,8 @@ class AIService {
     final apiKey = await getGeminiKey();
     if (apiKey == null) throw Exception('Gemini API Key not set');
 
-    // Smart Selection: Try selected model, fallback to others if it fails
     String modelName = await getGeminiModel();
     
-    // If image is present, ensure we use a vision-capable model if the selected one isn't (simplified check)
-    // For now, we assume all models in our list might support vision or we let the smart fallback handle it.
-    // Actually, 1.0-pro doesn't support vision, but 1.5-flash/pro do. 
-    // Let's rely on the try-catch block to switch models.
-
     final prompt = '''
 Analyze this food and provide nutritional information in JSON format.
 ${textInput != null ? 'Food description: $textInput' : 'Analyze the food in the image.'}
@@ -180,23 +173,17 @@ Return ONLY valid JSON in this exact format:
 }
 ''';
 
-    // Try selected model first
     try {
       final model = GenerativeModel(model: modelName, apiKey: apiKey);
       return await _generateContent(model, prompt, imageBytes);
     } catch (e) {
       print('Selected Gemini model $modelName failed: $e. Attempting smart fallback...');
       
-      // Fallback loop
       for (final fallbackModel in geminiModels) {
         if (fallbackModel == modelName) continue;
         try {
            final model = GenerativeModel(model: fallbackModel, apiKey: apiKey);
-           final result = await _generateContent(model, prompt, imageBytes);
-           // If successful, update the preference so we use this working model next time?
-           // Maybe not, user might want to stick to their choice. But for "Smart" behavior, we could.
-           // For now, just return the result.
-           return result;
+           return await _generateContent(model, prompt, imageBytes);
         } catch (e2) {
           continue;
         }
@@ -264,8 +251,6 @@ Return ONLY valid JSON in this exact format:
     }
 
     String modelName = await getChatGPTModel();
-    // Force vision capable model if image is present and selected model is known not to support it?
-    // For now, we'll try the selected model and fallback.
 
     try {
       return await _callChatGPT(apiKey, modelName, messages);
@@ -340,7 +325,6 @@ Return ONLY valid JSON in this exact format:
       final response = await model.generateContent([Content.text(prompt)]);
       return response.text ?? "I'm not sure how to respond to that.";
     } catch (e) {
-       // Fallback
        for (final fallbackModel in geminiModels) {
         if (fallbackModel == modelName) continue;
         try {
@@ -364,7 +348,6 @@ Return ONLY valid JSON in this exact format:
     try {
       return await _callChatGPTChat(apiKey, modelName, prompt);
     } catch (e) {
-      // Fallback
        for (final fallbackModel in chatgptModels) {
         if (fallbackModel == modelName) continue;
         try {
@@ -398,5 +381,15 @@ Return ONLY valid JSON in this exact format:
       }
       
       throw Exception('API error: ${response.statusCode}');
+  }
+
+  Future<String> getSupplementAdvice(String dietSummary, String goal) async {
+    final prompt = """
+    Based on this diet summary: "$dietSummary" and the goal "$goal", 
+    identify 1-2 potential nutrient gaps and suggest a specific supplement if needed.
+    If the diet looks good, say "No supplements needed".
+    Keep it very short (max 2 sentences).
+    """;
+    return await chat(prompt);
   }
 }

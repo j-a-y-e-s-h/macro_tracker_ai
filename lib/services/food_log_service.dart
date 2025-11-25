@@ -1,8 +1,6 @@
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:state_notifier/state_notifier.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:uuid/uuid.dart';
 import '../models/food_log_model.dart';
 
 final foodLogServiceProvider = StateNotifierProvider<FoodLogService, List<FoodLog>>((ref) {
@@ -68,5 +66,23 @@ class FoodLogService extends StateNotifier<List<FoodLog>> {
       'carbs': carbs,
       'fat': fat,
     };
+  }
+
+  List<FoodLog> getRecentLogs() {
+    // Return unique food items based on name, sorted by most recent
+    final uniqueNames = <String>{};
+    final recentLogs = <FoodLog>[];
+    
+    // Iterate in reverse to get most recent first
+    for (var i = state.length - 1; i >= 0; i--) {
+      final log = state[i];
+      if (!uniqueNames.contains(log.name)) {
+        uniqueNames.add(log.name);
+        recentLogs.add(log);
+      }
+      if (recentLogs.length >= 20) break; // Limit to 20 items
+    }
+    
+    return recentLogs;
   }
 }

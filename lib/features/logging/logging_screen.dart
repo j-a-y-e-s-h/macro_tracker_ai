@@ -1,15 +1,16 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:uuid/uuid.dart';
+import 'package:intl/intl.dart';
+import '../../core/theme/app_theme.dart';
 import '../../services/ai_service.dart';
-import '../../providers/ai_provider.dart';
 import '../../services/food_log_service.dart';
-import '../../services/user_service.dart';
+import '../../providers/ai_provider.dart';
 import '../../models/food_log_model.dart';
-import '../food_search/food_search_screen.dart';
-import '../settings/settings_screen.dart';
+import '../../services/user_service.dart';
+import 'package:uuid/uuid.dart';
 
 class LoggingScreen extends ConsumerStatefulWidget {
   const LoggingScreen({super.key});
@@ -19,282 +20,267 @@ class LoggingScreen extends ConsumerStatefulWidget {
 }
 
 class _LoggingScreenState extends ConsumerState<LoggingScreen> {
-  final _inputController = TextEditingController();
+  final _textController = TextEditingController();
   final _picker = ImagePicker();
-  
-  bool _isLoading = false;
-  Map<String, dynamic>? _aiResult;
-  String? _error;
-  XFile? _selectedImage;
+  File? _selectedImage;
+  bool _isAnalyzing = false;
+  int _selectedTab = 0; // 0: Photo, 1: Text
 
   Future<void> _pickImage(ImageSource source) async {
+    // Windows Fix: Camera not supported on Windows via image_picker
+    if (Platform.isWindows && source == ImageSource.camera) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Camera not supported on Windows. Opening Gallery instead.')),
+      );
+      source = ImageSource.gallery;
+    }
+
     try {
-      final XFile? image = await _picker.pickImage(source: source);
-      if (image != null) {
+      final pickedFile = await _picker.pickImage(source: source);
+      if (pickedFile != null) {
         setState(() {
-          _selectedImage = image;
-          _error = null;
+          _selectedImage = File(pickedFile.path);
         });
       }
     } catch (e) {
-      setState(() => _error = 'Failed to pick image: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error picking image: $e')),
+      );
     }
   }
 
-  Future<void> _analyzeFood() async {
-    final input = _inputController.text.trim();
-    if (input.isEmpty && _selectedImage == null) {
-      setState(() => _error = 'Please enter text or pick an image');
+  Future<void> _analyzeAndLog() async {
+    if (_selectedImage == null && _textController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please add a photo or text description')),
+      );
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-      _error = null;
-      _aiResult = null;
-    });
+    setState(() => _isAnalyzing = true);
 
     try {
       final aiService = ref.read(aiServiceProvider);
-      final imageBytes = _selectedImage != null ? await _selectedImage!.readAsBytes() : null;
+      Uint8List? imageBytes;
+      if (_selectedImage != null) {
+        imageBytes = await _selectedImage!.readAsBytes();
+      }
+
+      final result = await aiService.analyzeFood(_textController.text, imageBytes);
       
-      final result = await aiService.analyzeFood(
-        input.isEmpty ? null : input,
-        imageBytes,
+      final user = ref.read(userServiceProvider);
+      if (user == null) {
+         ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('User not found. Please log in.')),
+        );
+        return;
+      }
+
+      // Create Log
+      final log = FoodLog(
+        id: const Uuid().v4(),
+        userId: user.id,
+        name: result['name'] ?? 'Unknown Food',
+        calories: (result['calories'] as num).toDouble(),
+        protein: (result['protein'] as num).toDouble(),
+        carbs: (result['carbs'] as num).toDouble(),
+        fat: (result['fat'] as num).toDouble(),
+        timestamp: DateTime.now(),
       );
-      
-      setState(() => _aiResult = result);
+
+      ref.read(foodLogServiceProvider.notifier).addLog(log);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Logged: ${log.name}')),
+        );
+        Navigator.pop(context);
+      }
     } catch (e) {
-      setState(() => _error = 'AI Analysis Error: ${e.toString()}');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Analysis failed: $e')),
+        );
+      }
     } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _saveLog() async {
-    if (_aiResult == null) return;
-
-    final user = ref.read(userServiceProvider);
-    if (user == null) return;
-
-    final log = FoodLog(
-      id: const Uuid().v4(),
-      userId: user.id,
-      name: _aiResult!['name'] ?? 'Unknown Food',
-      calories: (_aiResult!['calories'] as num?)?.toDouble() ?? 0,
-      protein: (_aiResult!['protein'] as num?)?.toDouble() ?? 0,
-      carbs: (_aiResult!['carbs'] as num?)?.toDouble() ?? 0,
-      fat: (_aiResult!['fat'] as num?)?.toDouble() ?? 0,
-      timestamp: DateTime.now(),
-      isAiGenerated: true,
-      imageUrl: _selectedImage?.path,
-    );
-
-    await ref.read(foodLogServiceProvider.notifier).addLog(log);
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Food logged successfully!'),  backgroundColor: Color(0xFF00D9C0)),
-      );
-      Navigator.pop(context); // Return to Dashboard
+      if (mounted) {
+        setState(() => _isAnalyzing = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Log Food')),
+      backgroundColor: AppTheme.black,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: const Text('Log Food', style: TextStyle(fontWeight: FontWeight.bold)),
+        centerTitle: true,
+      ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Image Selection Area
-            if (_selectedImage != null)
-              Stack(
-                alignment: Alignment.topRight,
+            // Tabs
+            Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: AppTheme.surface,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
                 children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Image.file(
-                      File(_selectedImage!.path),
-                      height: 200,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white),
-                    style: IconButton.styleFrom(backgroundColor: Colors.black54),
-                    onPressed: () => setState(() => _selectedImage = null),
-                  ),
-                ],
-              )
-            else
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _buildActionButton(
-                    icon: Icons.camera_alt,
-                    label: 'Camera',
-                    onTap: () => _pickImage(ImageSource.camera),
-                  ),
-                  _buildActionButton(
-                    icon: Icons.photo_library,
-                    label: 'Gallery',
-                    onTap: () => _pickImage(ImageSource.gallery),
-                  ),
+                  Expanded(child: _buildTab('Photo', 0)),
+                  Expanded(child: _buildTab('Text', 1)),
                 ],
               ),
-            
-            const SizedBox(height: 24),
-
-            TextField(
-              controller: _inputController,
-              decoration: InputDecoration(
-                labelText: 'What did you eat?',
-                hintText: 'e.g., 2 eggs and toast',
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.send),
-                  onPressed: _analyzeFood,
-                ),
-                border: const OutlineInputBorder(),
-              ),
-              maxLines: 3,
             ),
             const SizedBox(height: 24),
 
-            Row(
-              children: [
-                Expanded(child: Divider(color: Colors.grey[800])),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16),
-                  child: Text('OR', style: TextStyle(color: Colors.grey)),
-                ),
-                Expanded(child: Divider(color: Colors.grey[800])),
-              ],
-            ),
-            const SizedBox(height: 24),
-
-            OutlinedButton.icon(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const FoodSearchScreen()),
-                );
-              },
-              icon: const Icon(Icons.search),
-              label: const Text('Search Food Database'),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.all(16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-
-            if (_isLoading)
-              const Padding(
-                padding: EdgeInsets.only(top: 24),
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else if (_error != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 24),
-                child: Column(
-                  children: [
-                    Text(_error!, style: const TextStyle(color: Colors.red), textAlign: TextAlign.center),
-                    if (_error!.contains('API Key'))
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: ElevatedButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                            );
-                          },
-                          child: const Text('Go to Settings'),
+            if (_selectedTab == 0) ...[
+              // Image Picker Area
+              GestureDetector(
+                onTap: () => _pickImage(ImageSource.gallery),
+                child: Container(
+                  height: 300,
+                  decoration: BoxDecoration(
+                    color: AppTheme.surface,
+                    borderRadius: BorderRadius.circular(24),
+                    image: _selectedImage != null
+                        ? DecorationImage(image: FileImage(_selectedImage!), fit: BoxFit.cover)
+                        : null,
+                    border: Border.all(color: AppTheme.surfaceHighlight),
+                  ),
+                  child: _selectedImage == null
+                      ? Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.camera_alt_outlined, size: 64, color: AppTheme.textSecondary),
+                            const SizedBox(height: 16),
+                            const Text(
+                              'Tap to take photo or upload',
+                              style: TextStyle(color: AppTheme.textSecondary, fontSize: 16),
+                            ),
+                            const SizedBox(height: 24),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                _buildActionButton(Icons.camera_alt, 'Camera', () => _pickImage(ImageSource.camera)),
+                                const SizedBox(width: 16),
+                                _buildActionButton(Icons.photo_library, 'Gallery', () => _pickImage(ImageSource.gallery)),
+                              ],
+                            ),
+                          ],
+                        )
+                      : Stack(
+                          children: [
+                            Positioned(
+                              top: 16,
+                              right: 16,
+                              child: IconButton(
+                                onPressed: () => setState(() => _selectedImage = null),
+                                icon: const Icon(Icons.close, color: Colors.white),
+                                style: IconButton.styleFrom(backgroundColor: Colors.black54),
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                  ],
                 ),
-              )
-            else if (_aiResult != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 24),
-                child: _buildResultCard(),
               ),
+            ] else ...[
+              // Text Input Area
+              TextField(
+                controller: _textController,
+                maxLines: 5,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: 'Describe your meal (e.g., "Grilled chicken breast with rice and broccoli")',
+                  hintStyle: const TextStyle(color: AppTheme.textSecondary),
+                  filled: true,
+                  fillColor: AppTheme.surface,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.all(20),
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 32),
+
+            // Analyze Button
+            SizedBox(
+              height: 56,
+              child: ElevatedButton(
+                onPressed: _isAnalyzing ? null : _analyzeAndLog,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primary,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  disabledBackgroundColor: AppTheme.surfaceHighlight,
+                ),
+                child: _isAnalyzing
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                      )
+                    : const Text(
+                        'Analyze & Log',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.black),
+                      ),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildActionButton({required IconData icon, required String label, required VoidCallback onTap}) {
+  Widget _buildTab(String title, int index) {
+    final isSelected = _selectedTab == index;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedTab = index),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Center(
+          child: Text(
+            title,
+            style: TextStyle(
+              color: isSelected ? AppTheme.black : AppTheme.textSecondary,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionButton(IconData icon, String label, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: Theme.of(context).cardTheme.color ?? const Color(0xFF1E1E1E),
+          color: AppTheme.surfaceHighlight,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white10),
         ),
-        child: Column(
+        child: Row(
           children: [
-            Icon(icon, size: 32, color: Theme.of(context).primaryColor),
-            const SizedBox(height: 8),
-            Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+            Icon(icon, size: 20, color: Colors.white),
+            const SizedBox(width: 8),
+            Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildResultCard() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            Text(
-              _aiResult!['name'],
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildMacroItem('Calories', _aiResult!['calories']),
-                _buildMacroItem('Protein', _aiResult!['protein']),
-                _buildMacroItem('Carbs', _aiResult!['carbs']),
-                _buildMacroItem('Fat', _aiResult!['fat']),
-              ],
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: _saveLog,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Theme.of(context).primaryColor,
-                minimumSize: const Size(double.infinity, 50),
-              ),
-              child: const Text('Add to Log', style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMacroItem(String label, dynamic value) {
-    return Column(
-      children: [
-        Text(label, style: const TextStyle(color: Colors.grey)),
-        Text(
-          value.toString(),
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-      ],
     );
   }
 }

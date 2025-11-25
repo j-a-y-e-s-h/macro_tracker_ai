@@ -1,4 +1,3 @@
-import '../models/user_model.dart';
 
 class TdeeCalculator {
   /// Calculates BMR using Mifflin-St Jeor Equation

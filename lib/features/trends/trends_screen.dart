@@ -100,8 +100,8 @@ class _TrendsScreenState extends ConsumerState<TrendsScreen> {
                 gridData: FlGridData(
                   show: true,
                   drawVerticalLine: false,
-                  getDrawingHorizontalLine: (value) => FlLine(
-                    color: const Color(0xFF334155),
+                  getDrawingHorizontalLine: (value) => const FlLine(
+                    color: Color(0xFF334155),
                     strokeWidth: 1,
                   ),
                 ),
@@ -201,8 +201,8 @@ class _TrendsScreenState extends ConsumerState<TrendsScreen> {
                 gridData: FlGridData(
                   show: true,
                   drawVerticalLine: false,
-                  getDrawingHorizontalLine: (value) => FlLine(
-                    color: const Color(0xFF334155),
+                  getDrawingHorizontalLine: (value) => const FlLine(
+                    color: Color(0xFF334155),
                     strokeWidth: 1,
                   ),
                 ),

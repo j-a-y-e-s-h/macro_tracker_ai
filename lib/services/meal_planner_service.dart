@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:state_notifier/state_notifier.dart';
 import '../models/meal_plan_model.dart';
 
 final mealPlannerServiceProvider = StateNotifierProvider<MealPlannerService, List<MealPlan>>((ref) {
