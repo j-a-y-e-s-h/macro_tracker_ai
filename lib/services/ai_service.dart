@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:async'; // Added for TimeoutException
+import 'dart:io';    // Added for SocketException
 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
@@ -14,13 +16,13 @@ class AIService {
   static const String _geminiModelKey = 'gemini_model';
   static const String _aiProviderKey = 'ai_provider';
   
-  // Model Lists
+  // Model Lists - Current stable models from official Gemini API
   static const List<String> geminiModels = [
-    'gemini-1.5-flash',
-    'gemini-1.5-pro',
-    'gemini-pro',
-    'gemini-1.0-pro',
-    'gemini-2.0-flash-exp', // Experimental
+    'gemini-2.5-flash',      // Recommended: Fast & Efficient (stable)
+    'gemini-2.5-pro',        // High Intelligence (stable)
+    'gemini-2.0-flash',      // Previous generation workhorse
+    'gemini-1.5-flash',      // Legacy fallback
+    'gemini-1.5-pro',        // Legacy fallback
   ];
 
   static const List<String> chatgptModels = [
@@ -54,13 +56,20 @@ class AIService {
 
   Future<void> saveGeminiKey(String key) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_geminiKeyKey, key);
-    await prefs.remove(_geminiModelKey);
+    final trimmedKey = key.trim(); // Sanitize input
+    if (trimmedKey.isEmpty) throw Exception('API key cannot be empty');
+    
+    debugPrint('Saving Gemini API key (length: ${trimmedKey.length})');
+    await prefs.setString(_geminiKeyKey, trimmedKey);
+    await prefs.remove(_geminiModelKey); // Force re-discovery
   }
 
   Future<void> saveChatGPTKey(String key) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_chatgptKeyKey, key);
+    final trimmedKey = key.trim();
+    if (trimmedKey.isEmpty) throw Exception('API key cannot be empty');
+
+    await prefs.setString(_chatgptKeyKey, trimmedKey);
     await prefs.remove(_chatgptModelKey);
   }
 
@@ -76,7 +85,20 @@ class AIService {
 
   Future<String> getGeminiModel() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_geminiModelKey) ?? 'gemini-1.5-flash';
+    final savedModel = prefs.getString(_geminiModelKey);
+    
+    // Validate saved model exists in current list, otherwise use default
+    if (savedModel != null && geminiModels.contains(savedModel)) {
+      return savedModel;
+    }
+    
+    // Return default and clear invalid cached model
+    if (savedModel != null && !geminiModels.contains(savedModel)) {
+      await prefs.remove(_geminiModelKey);
+      debugPrint('Cleared invalid cached model: $savedModel');
+    }
+    
+    return 'gemini-2.5-flash';
   }
 
   Future<void> setGeminiModel(String model) async {
@@ -96,28 +118,43 @@ class AIService {
   }
 
   Future<String> _discoverWorkingGeminiModel(String key) async {
-    debugPrint('Starting Gemini Model Discovery (HTTP)...');
+    debugPrint('🔍 Starting Gemini Model Discovery...');
+    debugPrint('API Key check: ${key.length} chars, starts with "${key.substring(0, key.length > 10 ? 10 : key.length)}..."');
     
     final prefs = await SharedPreferences.getInstance();
     final savedModel = prefs.getString(_geminiModelKey);
+    
+    // 1. Try saved model first
     if (savedModel != null) {
+       debugPrint('Testing saved model: $savedModel');
        if (await _testGeminiModelHttp(savedModel, key)) {
-         debugPrint('Saved Gemini model $savedModel is working.');
+         debugPrint('✓ Saved model $savedModel is working.');
          return savedModel;
+       } else {
+         debugPrint('✗ Saved model $savedModel failed.');
        }
     }
 
+    // 2. Try all available models
+    debugPrint('Testing ${geminiModels.length} available models...');
     for (final modelName in geminiModels) {
       if (modelName == savedModel) continue;
       
-      debugPrint('Testing Gemini model: $modelName');
+      debugPrint('Testing model: $modelName');
       if (await _testGeminiModelHttp(modelName, key)) {
-        debugPrint('Found working Gemini model: $modelName');
+        debugPrint('✓ Found working Gemini model: $modelName');
         await setGeminiModel(modelName);
         return modelName;
       }
     }
-    throw Exception('No working Gemini models found. Check your API Key and internet connection.');
+    
+    debugPrint('❌ All Gemini models failed.');
+    throw Exception(
+      'Could not find a working Gemini model. Please check:\n'
+      '1. Your API key is valid\n'
+      '2. You have internet connection\n'
+      '3. Gemini API quota is not exceeded'
+    );
   }
 
   Future<bool> _testGeminiModelHttp(String modelName, String key) async {
@@ -131,10 +168,22 @@ class AIService {
             'parts': [{'text': 'Hi'}]
           }]
         }),
+      ).timeout(
+        const Duration(seconds: 20), // Increased timeout to 20s
+        onTimeout: () {
+          debugPrint('  ⏱ Timeout testing $modelName');
+          throw TimeoutException('Request timeout');
+        },
       );
-      return response.statusCode == 200;
+      
+      if (response.statusCode == 200) {
+        return true;
+      } else {
+        debugPrint('  ✗ $modelName failed: ${response.statusCode} - ${response.body}');
+        return false;
+      }
     } catch (e) {
-      debugPrint('Gemini HTTP Test failed for $modelName: $e');
+      debugPrint('  ✗ Exception testing $modelName: $e');
       return false;
     }
   }
@@ -173,7 +222,7 @@ class AIService {
           'messages': [{'role': 'user', 'content': 'Hi'}],
           'max_tokens': 5,
         }),
-      );
+      ).timeout(const Duration(seconds: 20));
       return response.statusCode == 200;
     } catch (e) {
       return false;
@@ -189,8 +238,21 @@ class AIService {
       final key = await getGeminiKey();
       if (key == null) throw Exception('Gemini API Key not set');
       
-      await _discoverWorkingGeminiModel(key); 
-      return await _analyzeWithGeminiHttp(key, await getGeminiModel(), textInput, imageBytes != null ? Uint8List.fromList(imageBytes) : null);
+      // Use cached model, fallback to discovery if needed
+      String model;
+      try {
+        model = await getGeminiModel();
+      } catch (e) {
+        model = await _discoverWorkingGeminiModel(key);
+      }
+      
+      try {
+        return await _analyzeWithGeminiHttp(key, model, textInput, imageBytes != null ? Uint8List.fromList(imageBytes) : null);
+      } catch (e) {
+        debugPrint('Analysis failed with cached model $model, retrying discovery...');
+        final newModel = await _discoverWorkingGeminiModel(key);
+        return await _analyzeWithGeminiHttp(key, newModel, textInput, imageBytes != null ? Uint8List.fromList(imageBytes) : null);
+      }
     } else {
       final key = await getChatGPTKey();
       if (key == null) throw Exception('ChatGPT API Key not set');
@@ -241,24 +303,42 @@ Return ONLY valid JSON in this exact format:
       };
     }
 
-    final response = await http.post(
-      Uri.parse(url),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(body),
-    );
+    try {
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      ).timeout(
+        const Duration(seconds: 45), // Generous timeout for image analysis
+        onTimeout: () {
+          throw TimeoutException('Analysis timed out. Please check your internet connection.');
+        },
+      );
 
-    if (response.statusCode != 200) {
-      throw Exception('Gemini HTTP Error: ${response.body}');
-    }
+      if (response.statusCode != 200) {
+        final errorBody = response.body;
+        if (response.statusCode == 403 || response.statusCode == 401) {
+           throw Exception('Invalid API Key. Please check settings.');
+        } else if (response.statusCode == 429) {
+           throw Exception('Quota exceeded. Please try again later.');
+        }
+        throw Exception('Gemini Error (${response.statusCode}): $errorBody');
+      }
 
-    final data = jsonDecode(response.body);
-    final text = data['candidates']?[0]?['content']?['parts']?[0]?['text'] ?? '';
-    
-    final jsonMatch = RegExp(r'\{[\s\S]*\}').firstMatch(text);
-    if (jsonMatch != null) {
-      return jsonDecode(jsonMatch.group(0)!);
+      final data = jsonDecode(response.body);
+      final text = data['candidates']?[0]?['content']?['parts']?[0]?['text'] ?? '';
+      
+      final jsonMatch = RegExp(r'\{[\s\S]*\}').firstMatch(text);
+      if (jsonMatch != null) {
+        return jsonDecode(jsonMatch.group(0)!);
+      }
+      throw Exception('Could not parse AI response (Invalid JSON)');
+    } catch (e) {
+      if (e is SocketException || e is TimeoutException) {
+        throw Exception('Network error: Please check your internet connection.');
+      }
+      rethrow;
     }
-    throw Exception('Could not parse AI response (HTTP)');
   }
 
   Future<Map<String, dynamic>> _analyzeWithChatGPT(String? textInput, Uint8List? imageBytes) async {
@@ -312,7 +392,7 @@ Return ONLY valid JSON in this exact format:
           'messages': messages,
           'max_tokens': 500,
         }),
-      );
+      ).timeout(const Duration(seconds: 45));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -345,8 +425,21 @@ Return ONLY valid JSON in this exact format:
       } else {
         final key = await getGeminiKey();
         if (key == null) return "Please set your Gemini API Key in Settings.";
-        await _discoverWorkingGeminiModel(key);
-        return await _chatWithGeminiHttp(prompt, key, await getGeminiModel());
+        
+        // Use cached model if possible
+        String model;
+        try {
+          model = await getGeminiModel();
+        } catch (e) {
+          model = await _discoverWorkingGeminiModel(key);
+        }
+
+        try {
+          return await _chatWithGeminiHttp(prompt, key, model);
+        } catch (e) {
+          final newModel = await _discoverWorkingGeminiModel(key);
+          return await _chatWithGeminiHttp(prompt, key, newModel);
+        }
       }
     } catch (e) {
       return 'Error: $e';
@@ -355,22 +448,27 @@ Return ONLY valid JSON in this exact format:
 
   Future<String> _chatWithGeminiHttp(String prompt, String apiKey, String modelName) async {
     final url = 'https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent?key=$apiKey';
-    final response = await http.post(
-      Uri.parse(url),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'contents': [{
-          'parts': [{'text': prompt}]
-        }]
-      }),
-    );
+    
+    try {
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'contents': [{
+            'parts': [{'text': prompt}]
+          }]
+        }),
+      ).timeout(const Duration(seconds: 20));
 
-    if (response.statusCode != 200) {
-      return "Error connecting to Gemini (HTTP): ${response.statusCode}";
+      if (response.statusCode != 200) {
+        return "Error connecting to Gemini (HTTP): ${response.statusCode}";
+      }
+
+      final data = jsonDecode(response.body);
+      return data['candidates']?[0]?['content']?['parts']?[0]?['text'] ?? "I'm not sure how to respond to that.";
+    } catch (e) {
+      return "Connection error: $e";
     }
-
-    final data = jsonDecode(response.body);
-    return data['candidates']?[0]?['content']?['parts']?[0]?['text'] ?? "I'm not sure how to respond to that.";
   }
 
   Future<String> _chatWithChatGPT(String prompt, String apiKey) async {
@@ -395,7 +493,7 @@ Return ONLY valid JSON in this exact format:
             {'role': 'user', 'content': prompt}
           ],
         }),
-      );
+      ).timeout(const Duration(seconds: 20));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);

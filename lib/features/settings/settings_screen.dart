@@ -6,6 +6,7 @@ import '../../services/user_service.dart';
 import '../../services/food_log_service.dart';
 import '../../services/auth_service.dart';
 import '../../features/auth/auth_screen.dart';
+import 'diagnostic_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -323,6 +324,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               child: _isValidating 
                 ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: AppTheme.black))
                 : const Text('Save Configuration', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Center(
+            child: TextButton.icon(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const DiagnosticScreen()),
+              ),
+              icon: const Icon(Icons.bug_report, color: AppTheme.textSecondary, size: 20),
+              label: const Text('Run Diagnostics', style: TextStyle(color: AppTheme.textSecondary)),
             ),
           ),
         ],
