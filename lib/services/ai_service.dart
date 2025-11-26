@@ -1,8 +1,11 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'dart:typed_data';
+
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:flutter/foundation.dart';
+
+final aiServiceProvider = Provider<AIService>((ref) => AIService());
 
 class AIService {
   static const String _geminiKeyKey = 'gemini_api_key';
@@ -13,23 +16,22 @@ class AIService {
   
   // Model Lists
   static const List<String> geminiModels = [
-    'gemini-2.5-flash-preview',
-    'gemini-2.5-pro',
-    'gemini-1.5-pro',
     'gemini-1.5-flash',
+    'gemini-1.5-pro',
+    'gemini-pro',
+    'gemini-1.0-pro',
+    'gemini-2.0-flash-exp', // Experimental
   ];
 
   static const List<String> chatgptModels = [
-    'gpt-5',
-    'gpt-5-mini',
-    'gpt-5-nano',
-    'gpt-4.1-mini',
-    'o3',
-    'o4-mini',
+    'gpt-4o-mini',
     'gpt-4o',
+    'gpt-3.5-turbo',
+    'gpt-4-turbo',
   ];
 
-  // Getters & Setters
+  // --- Getters & Setters ---
+
   Future<String?> getGeminiKey() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_geminiKeyKey);
@@ -53,16 +55,18 @@ class AIService {
   Future<void> saveGeminiKey(String key) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_geminiKeyKey, key);
+    await prefs.remove(_geminiModelKey);
   }
 
   Future<void> saveChatGPTKey(String key) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_chatgptKeyKey, key);
+    await prefs.remove(_chatgptModelKey);
   }
 
   Future<String> getChatGPTModel() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_chatgptModelKey) ?? 'gpt-4o';
+    return prefs.getString(_chatgptModelKey) ?? 'gpt-4o-mini';
   }
 
   Future<void> setChatGPTModel(String model) async {
@@ -80,83 +84,124 @@ class AIService {
     await prefs.setString(_geminiModelKey, model);
   }
 
-  // Smart Model Validation
+  // --- Smart Auto-Discovery & Validation ---
+
   Future<String> validateApiKey(String provider, String key) async {
     if (provider == 'gemini') {
-      return await _findWorkingGeminiModel(key);
+      return await _discoverWorkingGeminiModel(key);
     } else if (provider == 'chatgpt') {
-      return await _findWorkingChatGPTModel(key);
+      return await _discoverWorkingChatGPTModel(key);
     }
     throw Exception('Unknown provider');
   }
 
-  Future<String> _findWorkingGeminiModel(String key) async {
-    final selectedModel = await getGeminiModel();
-    final modelsToTry = [selectedModel, ...geminiModels.where((m) => m != selectedModel)];
+  Future<String> _discoverWorkingGeminiModel(String key) async {
+    debugPrint('Starting Gemini Model Discovery (HTTP)...');
+    
+    final prefs = await SharedPreferences.getInstance();
+    final savedModel = prefs.getString(_geminiModelKey);
+    if (savedModel != null) {
+       if (await _testGeminiModelHttp(savedModel, key)) {
+         debugPrint('Saved Gemini model $savedModel is working.');
+         return savedModel;
+       }
+    }
 
-    for (final modelName in modelsToTry) {
-      try {
-        final model = GenerativeModel(model: modelName, apiKey: key);
-        await model.generateContent([Content.text('Test')]);
+    for (final modelName in geminiModels) {
+      if (modelName == savedModel) continue;
+      
+      debugPrint('Testing Gemini model: $modelName');
+      if (await _testGeminiModelHttp(modelName, key)) {
+        debugPrint('Found working Gemini model: $modelName');
+        await setGeminiModel(modelName);
         return modelName;
-      } catch (e) {
-        print('Model $modelName failed: $e');
-        continue;
       }
     }
-    throw Exception('No working Gemini models found. Check your API Key.');
+    throw Exception('No working Gemini models found. Check your API Key and internet connection.');
   }
 
-  Future<String> _findWorkingChatGPTModel(String key) async {
-    final selectedModel = await getChatGPTModel();
-    final modelsToTry = [selectedModel, ...chatgptModels.where((m) => m != selectedModel)];
+  Future<bool> _testGeminiModelHttp(String modelName, String key) async {
+    final url = 'https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent?key=$key';
+    try {
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'contents': [{
+            'parts': [{'text': 'Hi'}]
+          }]
+        }),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('Gemini HTTP Test failed for $modelName: $e');
+      return false;
+    }
+  }
 
-    for (final modelName in modelsToTry) {
-      try {
-        final response = await http.post(
-          Uri.parse('https://api.openai.com/v1/chat/completions'),
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer $key',
-          },
-          body: jsonEncode({
-            'model': modelName,
-            'messages': [{'role': 'user', 'content': 'Test'}],
-            'max_tokens': 5,
-          }),
-        );
+  Future<String> _discoverWorkingChatGPTModel(String key) async {
+    debugPrint('Starting ChatGPT Model Discovery...');
+    
+    final prefs = await SharedPreferences.getInstance();
+    final savedModel = prefs.getString(_chatgptModelKey);
+     if (savedModel != null) {
+       if (await _testChatGPTModel(savedModel, key)) {
+         return savedModel;
+       }
+    }
 
-        if (response.statusCode == 200) {
-          return modelName;
-        }
-      } catch (e) {
-        print('Model $modelName failed: $e');
-        continue;
+    for (final modelName in chatgptModels) {
+      if (modelName == savedModel) continue;
+      if (await _testChatGPTModel(modelName, key)) {
+        await setChatGPTModel(modelName);
+        return modelName;
       }
     }
     throw Exception('No working ChatGPT models found. Check your API Key.');
   }
 
-  // Analyze food with AI (text or image)
-  Future<Map<String, dynamic>> analyzeFood(String? textInput, List<int>? imageBytes) async {
-    final provider = await getAIProvider();
-    
+  Future<bool> _testChatGPTModel(String modelName, String key) async {
     try {
-      if (provider == 'chatgpt') {
-        return await _analyzeWithChatGPT(textInput, imageBytes != null ? Uint8List.fromList(imageBytes) : null);
-      } else {
-        return await _analyzeWithGemini(textInput, imageBytes != null ? Uint8List.fromList(imageBytes) : null);
-      }
+      final response = await http.post(
+        Uri.parse('https://api.openai.com/v1/chat/completions'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $key',
+        },
+        body: jsonEncode({
+          'model': modelName,
+          'messages': [{'role': 'user', 'content': 'Hi'}],
+          'max_tokens': 5,
+        }),
+      );
+      return response.statusCode == 200;
     } catch (e) {
-      rethrow;
+      return false;
     }
   }
 
-  Future<Map<String, dynamic>> _analyzeWithGemini(String? textInput, Uint8List? imageBytes) async {
-    final apiKey = await getGeminiKey();
-    if (apiKey == null) throw Exception('Gemini API Key not set');
+  // --- Core Analysis Methods ---
 
-    String modelName = await getGeminiModel();
+  Future<Map<String, dynamic>> analyzeFood(String? textInput, List<int>? imageBytes) async {
+    final provider = await getAIProvider();
+    
+    if (provider == 'gemini') {
+      final key = await getGeminiKey();
+      if (key == null) throw Exception('Gemini API Key not set');
+      
+      await _discoverWorkingGeminiModel(key); 
+      return await _analyzeWithGeminiHttp(key, await getGeminiModel(), textInput, imageBytes != null ? Uint8List.fromList(imageBytes) : null);
+    } else {
+      final key = await getChatGPTKey();
+      if (key == null) throw Exception('ChatGPT API Key not set');
+      
+      await _discoverWorkingChatGPTModel(key);
+      return await _analyzeWithChatGPT(textInput, imageBytes != null ? Uint8List.fromList(imageBytes) : null);
+    }
+  }
+
+  Future<Map<String, dynamic>> _analyzeWithGeminiHttp(String apiKey, String modelName, String? textInput, Uint8List? imageBytes) async {
+    final url = 'https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent?key=$apiKey';
     
     final prompt = '''
 Analyze this food and provide nutritional information in JSON format.
@@ -173,50 +218,52 @@ Return ONLY valid JSON in this exact format:
 }
 ''';
 
-    try {
-      final model = GenerativeModel(model: modelName, apiKey: apiKey);
-      return await _generateContent(model, prompt, imageBytes);
-    } catch (e) {
-      print('Selected Gemini model $modelName failed: $e. Attempting smart fallback...');
-      
-      for (final fallbackModel in geminiModels) {
-        if (fallbackModel == modelName) continue;
-        try {
-           final model = GenerativeModel(model: fallbackModel, apiKey: apiKey);
-           return await _generateContent(model, prompt, imageBytes);
-        } catch (e2) {
-          continue;
-        }
-      }
-      throw Exception('All Gemini models failed. Please check your API key or internet connection.');
-    }
-  }
-
-  Future<Map<String, dynamic>> _generateContent(GenerativeModel model, String prompt, Uint8List? imageBytes) async {
-    final Content content;
+    final Map<String, dynamic> body;
     if (imageBytes != null) {
-      content = Content.multi([
-        TextPart(prompt),
-        DataPart('image/jpeg', imageBytes),
-      ]);
+      body = {
+        'contents': [{
+          'parts': [
+            {'text': prompt},
+            {
+              'inline_data': {
+                'mime_type': 'image/jpeg',
+                'data': base64Encode(imageBytes)
+              }
+            }
+          ]
+        }]
+      };
     } else {
-      content = Content.text(prompt);
+      body = {
+        'contents': [{
+          'parts': [{'text': prompt}]
+        }]
+      };
     }
 
-    final response = await model.generateContent([content]);
-    final text = response.text ?? '';
+    final response = await http.post(
+      Uri.parse(url),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(body),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Gemini HTTP Error: ${response.body}');
+    }
+
+    final data = jsonDecode(response.body);
+    final text = data['candidates']?[0]?['content']?['parts']?[0]?['text'] ?? '';
     
     final jsonMatch = RegExp(r'\{[\s\S]*\}').firstMatch(text);
     if (jsonMatch != null) {
       return jsonDecode(jsonMatch.group(0)!);
     }
-    
-    throw Exception('Could not parse AI response');
+    throw Exception('Could not parse AI response (HTTP)');
   }
 
   Future<Map<String, dynamic>> _analyzeWithChatGPT(String? textInput, Uint8List? imageBytes) async {
     final apiKey = await getChatGPTKey();
-    if (apiKey == null) throw Exception('ChatGPT API Key not set');
+    final modelName = await getChatGPTModel();
 
     final prompt = '''
 Analyze this food and provide nutritional information in JSON format.
@@ -250,22 +297,7 @@ Return ONLY valid JSON in this exact format:
       messages.add({'role': 'user', 'content': prompt});
     }
 
-    String modelName = await getChatGPTModel();
-
-    try {
-      return await _callChatGPT(apiKey, modelName, messages);
-    } catch (e) {
-      print('Selected ChatGPT model $modelName failed: $e. Attempting smart fallback...');
-       for (final fallbackModel in chatgptModels) {
-        if (fallbackModel == modelName) continue;
-        try {
-           return await _callChatGPT(apiKey, fallbackModel, messages);
-        } catch (e2) {
-          continue;
-        }
-      }
-      throw Exception('All ChatGPT models failed. Please check your API key or quota.');
-    }
+    return await _callChatGPT(apiKey!, modelName, messages);
   }
 
   Future<Map<String, dynamic>> _callChatGPT(String apiKey, String model, List<Map<String, dynamic>> messages) async {
@@ -299,63 +331,53 @@ Return ONLY valid JSON in this exact format:
       throw Exception('API error: ${response.statusCode}');
   }
 
-  // Chat function for AI Coach
+  // --- Chat / Coach Methods ---
+
   Future<String> chat(String prompt) async {
     final provider = await getAIProvider();
     
     try {
       if (provider == 'chatgpt') {
-        return await _chatWithChatGPT(prompt);
+        final key = await getChatGPTKey();
+        if (key == null) return "Please set your ChatGPT API Key in Settings.";
+        await _discoverWorkingChatGPTModel(key);
+        return await _chatWithChatGPT(prompt, key);
       } else {
-        return await _chatWithGemini(prompt);
+        final key = await getGeminiKey();
+        if (key == null) return "Please set your Gemini API Key in Settings.";
+        await _discoverWorkingGeminiModel(key);
+        return await _chatWithGeminiHttp(prompt, key, await getGeminiModel());
       }
     } catch (e) {
       return 'Error: $e';
     }
   }
 
-  Future<String> _chatWithGemini(String prompt) async {
-    final apiKey = await getGeminiKey();
-    if (apiKey == null) return "Please set your Gemini API Key in Settings.";
+  Future<String> _chatWithGeminiHttp(String prompt, String apiKey, String modelName) async {
+    final url = 'https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent?key=$apiKey';
+    final response = await http.post(
+      Uri.parse(url),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'contents': [{
+          'parts': [{'text': prompt}]
+        }]
+      }),
+    );
 
-    String modelName = await getGeminiModel();
-
-    try {
-      final model = GenerativeModel(model: modelName, apiKey: apiKey);
-      final response = await model.generateContent([Content.text(prompt)]);
-      return response.text ?? "I'm not sure how to respond to that.";
-    } catch (e) {
-       for (final fallbackModel in geminiModels) {
-        if (fallbackModel == modelName) continue;
-        try {
-           final model = GenerativeModel(model: fallbackModel, apiKey: apiKey);
-           final response = await model.generateContent([Content.text(prompt)]);
-           return response.text ?? "I'm not sure how to respond to that.";
-        } catch (e2) {
-          continue;
-        }
-      }
-      return "Error connecting to Gemini: $e";
+    if (response.statusCode != 200) {
+      return "Error connecting to Gemini (HTTP): ${response.statusCode}";
     }
+
+    final data = jsonDecode(response.body);
+    return data['candidates']?[0]?['content']?['parts']?[0]?['text'] ?? "I'm not sure how to respond to that.";
   }
 
-  Future<String> _chatWithChatGPT(String prompt) async {
-    final apiKey = await getChatGPTKey();
-    if (apiKey == null) return "Please set your ChatGPT API Key in Settings.";
-
-    String modelName = await getChatGPTModel();
-
+  Future<String> _chatWithChatGPT(String prompt, String apiKey) async {
+    final modelName = await getChatGPTModel();
     try {
       return await _callChatGPTChat(apiKey, modelName, prompt);
     } catch (e) {
-       for (final fallbackModel in chatgptModels) {
-        if (fallbackModel == modelName) continue;
-        try {
-           return await _callChatGPTChat(apiKey, fallbackModel, prompt);
-        } catch (e2) {
-          continue;
-        }
-      }
       return "Error connecting to ChatGPT: $e";
     }
   }

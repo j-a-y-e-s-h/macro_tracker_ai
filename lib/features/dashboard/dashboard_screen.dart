@@ -6,7 +6,6 @@ import '../../core/theme/app_theme.dart';
 import '../../services/user_service.dart';
 import '../../services/food_log_service.dart';
 import '../../services/ai_service.dart';
-import '../../providers/ai_provider.dart';
 import '../logging/quick_add_macros_screen.dart';
 import '../logging/logging_screen.dart';
 import '../food_search/food_search_screen.dart';
@@ -79,9 +78,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final prefs = await SharedPreferences.getInstance();
     final dateKey = DateFormat('yyyy-MM-dd').format(_currentDate);
     String habitKey = '';
-    if (key.contains('Walk')) habitKey = 'habit_walk';
-    else if (key.contains('Veggies')) habitKey = 'habit_veggies';
-    else if (key.contains('Sugar')) habitKey = 'habit_sugar';
+    if (key.contains('Walk')) {
+      habitKey = 'habit_walk';
+    } else if (key.contains('Veggies')) {
+      habitKey = 'habit_veggies';
+    } else if (key.contains('Sugar')) {
+      habitKey = 'habit_sugar';
+    }
     
     await prefs.setBool('${habitKey}_$dateKey', value);
     setState(() => _habits[key] = value);
@@ -115,7 +118,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _loadingTip = false);
+      if (mounted) {
+        setState(() {
+          if (e.toString().contains('429')) {
+             _aiTip = "Stay consistent! (AI quota limit reached)";
+          } else {
+             _aiTip = "Stay consistent and hit your goals!";
+          }
+          _loadingTip = false;
+        });
+      }
     }
   }
 
@@ -162,12 +174,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return Container(
       height: 70,
       decoration: BoxDecoration(
-        color: AppTheme.surface.withOpacity(0.95),
+        color: AppTheme.surface.withValues(alpha: 0.95),
         borderRadius: BorderRadius.circular(35),
         border: Border.all(color: AppTheme.surfaceHighlight),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.3),
+            color: Colors.black.withValues(alpha: 0.3),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -229,30 +241,45 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       pinned: true,
       elevation: 0,
       centerTitle: true,
-      title: GestureDetector(
-        onTap: _pickDate,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: AppTheme.surface,
-            borderRadius: BorderRadius.circular(20),
+      title: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // App Logo (Icon for now, can be image)
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withValues(alpha: 0.2),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.auto_awesome, color: AppTheme.primary, size: 20),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                isToday ? 'Today' : DateFormat('EEE, MMM d').format(_currentDate),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
+          const SizedBox(width: 12),
+          GestureDetector(
+            onTap: _pickDate,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppTheme.surface,
+                borderRadius: BorderRadius.circular(20),
               ),
-              const SizedBox(width: 4),
-              const Icon(Icons.keyboard_arrow_down, size: 16, color: AppTheme.textSecondary),
-            ],
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    isToday ? 'Today' : DateFormat('EEE, MMM d').format(_currentDate),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.keyboard_arrow_down, size: 16, color: AppTheme.textSecondary),
+                ],
+              ),
+            ),
           ),
-        ),
+        ],
       ),
       leading: IconButton(
         icon: const Icon(Icons.chevron_left, color: AppTheme.textSecondary),
@@ -313,7 +340,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final dailyTotals = ref.read(foodLogServiceProvider.notifier).getDailyTotals(date);
     
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 120), // Extra padding for floating bar
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 140), // Increased bottom padding for floating bar + safe area
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -351,16 +378,50 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Hello, ${user.name.split(' ').first}',
-          style: const TextStyle(
-            fontSize: 32,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-            letterSpacing: -1,
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Hello,',
+                  style: TextStyle(
+                    fontSize: 20,
+                    color: Colors.white.withValues(alpha: 0.7),
+                  ),
+                ),
+                Text(
+                  user.name.split(' ').first,
+                  style: const TextStyle(
+                    fontSize: 36,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: -1,
+                  ),
+                ),
+              ],
+            ),
+            // Profile Pic or Avatar
+            Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                gradient: AppTheme.primaryGradient,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.primary.withValues(alpha: 0.4),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Icon(Icons.person, color: Colors.black),
+            ),
+          ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 16),
         Text(
           message,
           style: const TextStyle(
@@ -375,40 +436,67 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   Widget _buildAISuggestion() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [AppTheme.primary.withOpacity(0.2), AppTheme.surface],
+          colors: [
+            AppTheme.primary.withValues(alpha: 0.15),
+            AppTheme.surface,
+          ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.primary.withOpacity(0.3)),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.2)),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primary.withValues(alpha: 0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: AppTheme.primary.withOpacity(0.2),
+              color: AppTheme.primary.withValues(alpha: 0.2),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.auto_awesome, color: AppTheme.primary),
+            child: const Icon(Icons.auto_awesome, color: AppTheme.primary, size: 24),
           ),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'AI Coach Tip',
-                  style: TextStyle(
-                    color: AppTheme.primary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
+                Row(
+                  children: [
+                    const Text(
+                      'AI Coach Tip',
+                      style: TextStyle(
+                        color: AppTheme.primary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primary.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text(
+                        'BETA',
+                        style: TextStyle(color: AppTheme.primary, fontSize: 8, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 6),
                 _loadingTip 
                   ? const SizedBox(
                       height: 20, 
@@ -420,7 +508,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w600,
-                        fontSize: 14,
+                        fontSize: 15,
+                        height: 1.3,
                       ),
                     ),
               ],
@@ -443,7 +532,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.2),
+            color: Colors.black.withValues(alpha: 0.2),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -706,7 +795,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       key: ValueKey(log.id),
       direction: DismissDirection.endToStart,
       background: Container(
-        color: Colors.red.withOpacity(0.2),
+        color: Colors.red.withValues(alpha: 0.2),
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
         child: const Icon(Icons.delete, color: Colors.red),

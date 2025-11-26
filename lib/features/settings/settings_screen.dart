@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_theme.dart';
 import '../../services/ai_service.dart';
-import '../../providers/ai_provider.dart';
 import '../../services/user_service.dart';
-import '../../features/onboarding/ultimate_onboarding_screen.dart';
+import '../../services/food_log_service.dart';
+import '../../services/auth_service.dart';
+import '../../features/auth/auth_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -174,7 +175,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           borderSide: const BorderSide(color: AppTheme.primary),
         ),
         filled: true,
-        fillColor: AppTheme.black.withOpacity(0.5),
+        fillColor: AppTheme.black.withValues(alpha: 0.5),
       ),
     );
   }
@@ -337,7 +338,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: isSelected ? AppTheme.primary.withOpacity(0.2) : AppTheme.surfaceHighlight,
+            color: isSelected ? AppTheme.primary.withValues(alpha: 0.2) : AppTheme.surfaceHighlight,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: isSelected ? AppTheme.primary : Colors.transparent),
           ),
@@ -389,10 +390,88 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             leading: const Icon(Icons.delete_outline, color: Colors.red),
             title: const Text('Clear All Data', style: TextStyle(color: Colors.white)),
             onTap: () async {
-              // TODO: Implement clear data
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Data cleared! (Simulated)')),
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (context) => Dialog(
+                  backgroundColor: AppTheme.surface,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withValues(alpha: 0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 32),
+                        ),
+                        const SizedBox(height: 24),
+                        const Text(
+                          'Clear All Data?',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'This will permanently delete all your food logs and history. This action cannot be undone.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: AppTheme.textSecondary, height: 1.5),
+                        ),
+                        const SizedBox(height: 32),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                    side: const BorderSide(color: AppTheme.surfaceHighlight),
+                                  ),
+                                ),
+                                child: const Text('Cancel', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red,
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                  elevation: 0,
+                                ),
+                                child: const Text('Delete', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               );
+
+              if (confirm == true) {
+                await ref.read(foodLogServiceProvider.notifier).clearAllData();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('All data cleared successfully'),
+                      backgroundColor: AppTheme.surface,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              }
             },
           ),
         ],
@@ -406,10 +485,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       height: 56,
       child: OutlinedButton(
         onPressed: () async {
+          await ref.read(authServiceProvider).signOut();
           await ref.read(userServiceProvider.notifier).clearUser();
           if (mounted) {
             Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(builder: (_) => const UltimateOnboardingScreen()),
+              MaterialPageRoute(builder: (_) => const AuthScreen()),
               (route) => false,
             );
           }

@@ -36,7 +36,6 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final logs = ref.watch(foodLogServiceProvider);
     final dailyLogs = ref.read(foodLogServiceProvider.notifier).getLogsForDate(_selectedDate);
     final dailyTotals = ref.read(foodLogServiceProvider.notifier).getDailyTotals(_selectedDate);
     final user = ref.watch(userServiceProvider);

@@ -2,6 +2,13 @@ import 'dart:convert';
 import 'package:openfoodfacts/openfoodfacts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+final foodSearchServiceProvider = Provider<FoodSearchService>((ref) {
+  return FoodSearchService();
+});
+
 class FoodSearchService {
   FoodSearchService() {
     _initUserAgent();
@@ -17,13 +24,49 @@ class FoodSearchService {
   Future<List<Product>> searchProducts(String query) async {
     _initUserAgent();
     if (query.isEmpty) return [];
+    debugPrint('Searching for "$query" with 30s timeout...');
 
+    // 1. Try generic search first (broadest possible)
     final configuration = ProductSearchQueryConfiguration(
       parametersList: [
         SearchTerms(terms: [query]),
       ],
       language: OpenFoodFactsLanguage.ENGLISH,
-      // languages: [OpenFoodFactsLanguage.ENGLISH], // Removed to avoid conflict
+      fields: [
+        ProductField.NAME,
+        ProductField.BRANDS,
+        ProductField.NUTRIMENTS,
+        ProductField.IMAGE_FRONT_URL,
+        ProductField.QUANTITY,
+        ProductField.SERVING_SIZE,
+      ],
+      version: ProductQueryVersion.v3,
+    );
+
+    try {
+      final result = await OpenFoodAPIClient.searchProducts(
+        null, // User can be null for anonymous access
+        configuration,
+      ).timeout(const Duration(seconds: 30));
+
+      if (result.products != null && result.products!.isNotEmpty) {
+        return result.products!;
+      }
+      
+      // 2. If empty, try fallback to global explicitly
+      return await _searchGlobal(query);
+    } catch (e) {
+      debugPrint('Error searching products: $e');
+      return await _searchGlobal(query);
+    }
+  }
+
+  Future<List<Product>> _searchGlobal(String query) async {
+     final configuration = ProductSearchQueryConfiguration(
+      parametersList: [
+        SearchTerms(terms: [query]),
+      ],
+      language: OpenFoodFactsLanguage.ENGLISH,
       fields: [
         ProductField.NAME,
         ProductField.BRANDS,
@@ -36,13 +79,12 @@ class FoodSearchService {
 
     try {
       final result = await OpenFoodAPIClient.searchProducts(
-        const User(userId: '', password: ''),
+        null,
         configuration,
-      );
-
+      ).timeout(const Duration(seconds: 30));
       return result.products ?? [];
     } catch (e) {
-      print('Error searching products: $e');
+      debugPrint('Global search error: $e');
       return [];
     }
   }
@@ -67,7 +109,7 @@ class FoodSearchService {
       final result = await OpenFoodAPIClient.getProductV3(configuration);
       return result.product;
     } catch (e) {
-      print('Error fetching product by barcode: $e');
+      debugPrint('Error fetching product by barcode: $e');
       return null;
     }
   }

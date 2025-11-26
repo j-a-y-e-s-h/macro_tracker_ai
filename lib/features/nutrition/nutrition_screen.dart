@@ -57,7 +57,6 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
   }
 
   Widget _buildWeeklyAveragesCard(user) {
-    final logs = ref.watch(foodLogServiceProvider);
     final now = DateTime.now();
     
     // Calculate averages for selected period
@@ -173,7 +172,6 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
   }
 
   Widget _buildMacroDistributionCard(user) {
-    final logs = ref.watch(foodLogServiceProvider);
     final now = DateTime.now();
     
     var totalProtein = 0.0, totalCarbs = 0.0, totalFat = 0.0;
@@ -363,7 +361,7 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
                     dotData: const FlDotData(show: false),
                     belowBarData: BarAreaData(
                       show: true,
-                      color: const Color(0xFF14B8A6).withOpacity(0.2),
+                      color: const Color(0xFF14B8A6).withValues(alpha: 0.2),
                     ),
                   ),
                 ],

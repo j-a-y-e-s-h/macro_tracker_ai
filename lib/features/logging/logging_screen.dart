@@ -3,11 +3,9 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:intl/intl.dart';
 import '../../core/theme/app_theme.dart';
 import '../../services/ai_service.dart';
 import '../../services/food_log_service.dart';
-import '../../providers/ai_provider.dart';
 import '../../models/food_log_model.dart';
 import '../../services/user_service.dart';
 import 'package:uuid/uuid.dart';
@@ -36,16 +34,22 @@ class _LoggingScreenState extends ConsumerState<LoggingScreen> {
     }
 
     try {
-      final pickedFile = await _picker.pickImage(source: source);
+      final pickedFile = await _picker.pickImage(
+        source: source,
+        imageQuality: 50, // Compress to 50% quality
+        maxWidth: 1024,   // Resize to max 1024px width
+      );
       if (pickedFile != null) {
         setState(() {
           _selectedImage = File(pickedFile.path);
         });
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error picking image: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error picking image: $e')),
+        );
+      }
     }
   }
 
@@ -70,9 +74,11 @@ class _LoggingScreenState extends ConsumerState<LoggingScreen> {
       
       final user = ref.read(userServiceProvider);
       if (user == null) {
-         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('User not found. Please log in.')),
-        );
+         if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('User not found. Please log in.')),
+          );
+         }
         return;
       }
 

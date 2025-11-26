@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_theme.dart';
 import '../../services/user_service.dart';
-import '../../models/user_model.dart';
 import '../main_navigation.dart';
-import '../auth/email_verification_screen.dart';
+import '../../services/auth_service.dart';
 
 class UltimateOnboardingScreen extends ConsumerStatefulWidget {
   const UltimateOnboardingScreen({super.key});
@@ -25,20 +24,24 @@ class _UltimateOnboardingScreenState extends ConsumerState<UltimateOnboardingScr
   double _weight = 70; // kg
   String _activityLevel = 'Moderate';
   String _goal = 'Lose Weight';
-  String _dietPreference = 'Balanced';
   
   // Auth Data
-  final _nameController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  bool _isLogin = false;
+  // No longer needed as user is already logged in
+  // We might still want a name field if it wasn't captured during signup (e.g. email signup)
+  late final TextEditingController _nameController;
+
+  @override
+  void initState() {
+    super.initState();
+    final user = ref.read(authServiceProvider).currentUser;
+    _nameController = TextEditingController(text: user?.displayName ?? '');
+  }
 
   @override
   void dispose() {
     _pageController.dispose();
     _nameController.dispose();
-    _emailController.dispose();
-    _passwordController.dispose();
+
     super.dispose();
   }
 
@@ -57,53 +60,63 @@ class _UltimateOnboardingScreenState extends ConsumerState<UltimateOnboardingScr
       return;
     }
 
-    // Email validation
-    final email = _emailController.text.trim();
-    if (email.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your email')),
-      );
-      return;
-    }
-    
-    // Simple email regex validation
-    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
-    if (!emailRegex.hasMatch(email)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid email address')),
-      );
-      return;
-    }
-
     setState(() => _isCalculating = true);
     
     // Simulate "AI Calculation"
     await Future.delayed(const Duration(seconds: 2));
 
-    // Create User
-    await ref.read(userServiceProvider.notifier).updateUserStats(
-      age: _age,
-      gender: _gender,
-      weight: _weight,
-      height: _height,
-      activityLevel: _activityLevel,
-      goal: _goal,
-    );
-    
-    // Save name and email
-    final user = ref.read(userServiceProvider);
-    if (user != null) {
-      final updatedUser = user.copyWith(
-        name: _nameController.text,
-        email: email,
-      );
-      await ref.read(userServiceProvider.notifier).saveUser(updatedUser);
-    }
+    try {
+      final user = ref.read(authServiceProvider).currentUser;
+      if (user == null) {
+        throw Exception('No authenticated user found');
+      }
 
-    if (mounted) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const EmailVerificationScreen()),
+      // Save User Plan to Firestore
+      final planData = {
+        'name': _nameController.text,
+        'email': user.email,
+        'age': _age,
+        'gender': _gender,
+        'height': _height,
+        'weight': _weight,
+        'activityLevel': _activityLevel,
+        'goal': _goal,
+        'createdAt': DateTime.now().toIso8601String(),
+      };
+      await ref.read(authServiceProvider).saveUserPlan(user.uid, planData);
+
+      // Update Local State (Riverpod)
+      await ref.read(userServiceProvider.notifier).updateUserStats(
+        age: _age,
+        gender: _gender,
+        weight: _weight,
+        height: _height,
+        activityLevel: _activityLevel,
+        goal: _goal,
       );
+      
+      final localUser = ref.read(userServiceProvider);
+      if (localUser != null) {
+        final updatedUser = localUser.copyWith(
+          name: _nameController.text,
+          email: user.email ?? '',
+        );
+        await ref.read(userServiceProvider.notifier).saveUser(updatedUser);
+      }
+
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const MainNavigation()),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString())),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isCalculating = false);
     }
   }
 
@@ -123,7 +136,7 @@ class _UltimateOnboardingScreenState extends ConsumerState<UltimateOnboardingScr
                   colors: [
                     AppTheme.black,
                     AppTheme.black,
-                    AppTheme.primary.withOpacity(0.1),
+                    AppTheme.primary.withValues(alpha: 0.1),
                   ],
                 ),
               ),
@@ -156,7 +169,7 @@ class _UltimateOnboardingScreenState extends ConsumerState<UltimateOnboardingScr
                       _buildHeightWeightPage(),
                       _buildActivityPage(),
                       _buildGoalPage(),
-                      _buildAuthPage(),
+                      _buildNamePage(), // Replaces AuthPage
                     ],
                   ),
                 ),
@@ -166,7 +179,7 @@ class _UltimateOnboardingScreenState extends ConsumerState<UltimateOnboardingScr
 
           if (_isCalculating)
             Container(
-              color: AppTheme.black.withOpacity(0.9),
+              color: AppTheme.black.withValues(alpha: 0.9),
               child: const Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -273,6 +286,7 @@ class _UltimateOnboardingScreenState extends ConsumerState<UltimateOnboardingScr
           const SizedBox(height: 32),
           
           const Text('Height (cm)', style: TextStyle(color: AppTheme.textSecondary)),
+          const SizedBox(height: 16),
           Slider(
             value: _height,
             min: 100,
@@ -281,10 +295,52 @@ class _UltimateOnboardingScreenState extends ConsumerState<UltimateOnboardingScr
             inactiveColor: AppTheme.surface,
             onChanged: (val) => setState(() => _height = val),
           ),
-          Center(child: Text('${_height.toInt()} cm', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white))),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppTheme.surface,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                IconButton(
+                  onPressed: () => setState(() => _height = (_height > 100) ? _height - 1 : _height),
+                  icon: const Icon(Icons.remove, color: AppTheme.primary),
+                ),
+                SizedBox(
+                  width: 100,
+                  child: TextField(
+                    controller: TextEditingController(text: _height.toInt().toString())
+                      ..selection = TextSelection.fromPosition(
+                          TextPosition(offset: _height.toInt().toString().length)),
+                    keyboardType: TextInputType.number,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      suffixText: ' cm',
+                      suffixStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 16),
+                    ),
+                    onChanged: (val) {
+                      final parsed = double.tryParse(val);
+                      if (parsed != null && parsed >= 100 && parsed <= 250) {
+                        setState(() => _height = parsed);
+                      }
+                    },
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => setState(() => _height = (_height < 250) ? _height + 1 : _height),
+                  icon: const Icon(Icons.add, color: AppTheme.primary),
+                ),
+              ],
+            ),
+          ),
           
           const SizedBox(height: 32),
           const Text('Weight (kg)', style: TextStyle(color: AppTheme.textSecondary)),
+          const SizedBox(height: 16),
           Slider(
             value: _weight,
             min: 30,
@@ -293,7 +349,48 @@ class _UltimateOnboardingScreenState extends ConsumerState<UltimateOnboardingScr
             inactiveColor: AppTheme.surface,
             onChanged: (val) => setState(() => _weight = val),
           ),
-          Center(child: Text('${_weight.toInt()} kg', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white))),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppTheme.surface,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                IconButton(
+                  onPressed: () => setState(() => _weight = (_weight > 30) ? _weight - 0.5 : _weight),
+                  icon: const Icon(Icons.remove, color: AppTheme.secondary),
+                ),
+                SizedBox(
+                  width: 120,
+                  child: TextField(
+                    controller: TextEditingController(text: _weight.toStringAsFixed(1))
+                      ..selection = TextSelection.fromPosition(
+                          TextPosition(offset: _weight.toStringAsFixed(1).length)),
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      suffixText: ' kg',
+                      suffixStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 16),
+                    ),
+                    onChanged: (val) {
+                      final parsed = double.tryParse(val);
+                      if (parsed != null && parsed >= 30 && parsed <= 200) {
+                        setState(() => _weight = parsed);
+                      }
+                    },
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => setState(() => _weight = (_weight < 200) ? _weight + 0.5 : _weight),
+                  icon: const Icon(Icons.add, color: AppTheme.secondary),
+                ),
+              ],
+            ),
+          ),
           
           const Spacer(),
           _buildPrimaryButton('Next', _nextPage),
@@ -317,10 +414,20 @@ class _UltimateOnboardingScreenState extends ConsumerState<UltimateOnboardingScr
               separatorBuilder: (_, __) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
                 final level = levels[index];
+                String description = '';
+                switch (level) {
+                  case 'Sedentary': description = 'Little to no exercise'; break;
+                  case 'Light': description = 'Light exercise 1-3 days/week'; break;
+                  case 'Moderate': description = 'Moderate exercise 3-5 days/week'; break;
+                  case 'Active': description = 'Hard exercise 6-7 days/week'; break;
+                  case 'Very Active': description = 'Very hard exercise & physical job'; break;
+                }
+                
                 return _buildSelectableCard(
                   level,
                   _activityLevel == level,
                   () => setState(() => _activityLevel = level),
+                  subtitle: description,
                 );
               },
             ),
@@ -362,16 +469,16 @@ class _UltimateOnboardingScreenState extends ConsumerState<UltimateOnboardingScr
     );
   }
 
-  Widget _buildAuthPage() {
+  Widget _buildNamePage() {
     return Padding(
       padding: const EdgeInsets.all(24),
       child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Save your plan', style: Theme.of(context).textTheme.titleLarge),
+            Text('One last thing...', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
-            const Text('Create an account to track your progress forever.', style: TextStyle(color: AppTheme.textSecondary)),
+            const Text('What should we call you?', style: TextStyle(color: AppTheme.textSecondary)),
             const SizedBox(height: 32),
             
             TextField(
@@ -382,70 +489,52 @@ class _UltimateOnboardingScreenState extends ConsumerState<UltimateOnboardingScr
                 prefixIcon: Icon(Icons.person_outline),
               ),
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _emailController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'Email',
-                prefixIcon: Icon(Icons.email_outlined),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _passwordController,
-              obscureText: true,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'Password',
-                prefixIcon: Icon(Icons.lock_outline),
-              ),
-            ),
             
             const SizedBox(height: 32),
-            _buildPrimaryButton('Create Account', _finishOnboarding),
-            
-            const SizedBox(height: 24),
-            Center(
-              child: TextButton(
-                onPressed: () {
-                  // Toggle login mode (UI only for now)
-                  setState(() => _isLogin = !_isLogin);
-                },
-                child: Text(
-                  _isLogin ? 'Need an account? Sign Up' : 'Already have an account? Log In',
-                  style: const TextStyle(color: AppTheme.primary),
-                ),
-              ),
-            ),
+            _buildPrimaryButton('Complete Setup', _finishOnboarding),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSelectableCard(String title, bool isSelected, VoidCallback onTap) {
+  Widget _buildSelectableCard(String title, bool isSelected, VoidCallback onTap, {String? subtitle}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.primary.withOpacity(0.2) : AppTheme.surface,
+          color: isSelected ? AppTheme.primary.withValues(alpha: 0.2) : AppTheme.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isSelected ? AppTheme.primary : Colors.transparent,
             width: 2,
           ),
         ),
-        child: Center(
-          child: Text(
-            title,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: isSelected ? AppTheme.primary : Colors.white,
+        child: Column(
+          children: [
+            Center(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: isSelected ? AppTheme.primary : Colors.white,
+                ),
+              ),
             ),
-          ),
+            if (subtitle != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isSelected ? AppTheme.primary.withValues(alpha: 0.8) : AppTheme.textSecondary,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ],
         ),
       ),
     );

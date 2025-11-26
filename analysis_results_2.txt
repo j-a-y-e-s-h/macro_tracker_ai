@@ -1,0 +1,5 @@
+Analyzing macro_tracker_ai...                                   
+
+   info - Use 'const' literals as arguments to constructors of '@immutable' classes - lib\features\logging\barcode_scanner_screen.dart:79:18 - prefer_const_literals_to_create_immutables
+   info - Don't invoke 'print' in production code - lib\services\food_search_service.dart:110:7 - avoid_print
+

@@ -1,0 +1,35 @@
+Analyzing macro_tracker_ai...                                   
+
+  error - The argument for the named parameter 'onSurface' was already specified - lib\core\theme\app_theme.dart:48:7 - duplicate_named_argument
+warning - The declaration '_onDetect' isn't referenced - lib\features\logging\barcode_scanner_screen.dart:27:8 - unused_element
+   info - Use 'const' literals as arguments to constructors of '@immutable' classes - lib\features\logging\barcode_scanner_screen.dart:79:18 - prefer_const_literals_to_create_immutables
+  error - Expected an identifier - lib\features\logging\barcode_scanner_screen.dart:83:11 - missing_identifier
+  error - Expected to find ']' - lib\features\logging\barcode_scanner_screen.dart:83:11 - expected_token
+  error - Undefined name 'aiServiceProvider' - lib\features\logging\logging_screen.dart:65:34 - undefined_identifier
+  error - Undefined name 'AppTheme' - lib\features\logging\logging_screen.dart:119:24 - undefined_identifier
+  error - Undefined name 'AppTheme' - lib\features\logging\logging_screen.dart:135:24 - undefined_identifier
+  error - Undefined name 'AppTheme' - lib\features\logging\logging_screen.dart:154:28 - undefined_identifier
+  error - Undefined name 'AppTheme' - lib\features\logging\logging_screen.dart:159:47 - undefined_identifier
+  error - Invalid constant value - lib\features\logging\logging_screen.dart:165:84 - invalid_constant
+  error - Undefined name 'AppTheme' - lib\features\logging\logging_screen.dart:165:84 - undefined_identifier
+  error - Invalid constant value - lib\features\logging\logging_screen.dart:169:55 - invalid_constant
+  error - Undefined name 'AppTheme' - lib\features\logging\logging_screen.dart:169:55 - undefined_identifier
+  error - Invalid constant value - lib\features\logging\logging_screen.dart:205:53 - invalid_constant
+  error - Undefined name 'AppTheme' - lib\features\logging\logging_screen.dart:205:53 - undefined_identifier
+  error - Undefined name 'AppTheme' - lib\features\logging\logging_screen.dart:207:30 - undefined_identifier
+  error - Undefined name 'AppTheme' - lib\features\logging\logging_screen.dart:225:36 - undefined_identifier
+  error - Undefined name 'AppTheme' - lib\features\logging\logging_screen.dart:227:44 - undefined_identifier
+  error - Invalid constant value - lib\features\logging\logging_screen.dart:237:92 - invalid_constant
+  error - Undefined name 'AppTheme' - lib\features\logging\logging_screen.dart:237:92 - undefined_identifier
+  error - Undefined name 'AppTheme' - lib\features\logging\logging_screen.dart:254:31 - undefined_identifier
+  error - Undefined name 'AppTheme' - lib\features\logging\logging_screen.dart:261:35 - undefined_identifier
+  error - Undefined name 'AppTheme' - lib\features\logging\logging_screen.dart:261:52 - undefined_identifier
+  error - Undefined name 'AppTheme' - lib\features\logging\logging_screen.dart:277:18 - undefined_identifier
+   info - The private field _goal could be 'final' - lib\features\onboarding\ultimate_onboarding_screen.dart:27:10 - prefer_final_fields
+warning - The value of the field '_goal' isn't used - lib\features\onboarding\ultimate_onboarding_screen.dart:27:10 - unused_field
+  error - The name '_goal' is already defined - lib\features\onboarding\ultimate_onboarding_screen.dart:27:10 - duplicate_definition
+   info - The import of 'dart:typed_data' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/foundation.dart' - lib\services\ai_service.dart:4:8 - unnecessary_import
+   info - Don't invoke 'print' in production code - lib\services\food_search_service.dart:57:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\food_search_service.dart:85:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\food_search_service.dart:110:7 - avoid_print
+

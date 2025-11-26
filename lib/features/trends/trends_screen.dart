@@ -237,7 +237,7 @@ class _TrendsScreenState extends ConsumerState<TrendsScreen> {
                     dotData: const FlDotData(show: false),
                     belowBarData: BarAreaData(
                       show: true,
-                      color: const Color(0xFF14B8A6).withOpacity(0.2),
+                      color: const Color(0xFF14B8A6).withValues(alpha: 0.2),
                     ),
                   ),
                 ],

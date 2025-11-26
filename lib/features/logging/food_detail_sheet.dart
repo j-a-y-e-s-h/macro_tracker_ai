@@ -26,8 +26,8 @@ class FoodDetailSheet extends StatefulWidget {
 class _FoodDetailSheetState extends State<FoodDetailSheet> {
   double _amount = 100; // Default 100g
   String _unit = 'g'; // g, oz, serving
-  DateTime _selectedDate = DateTime.now();
-  TimeOfDay _selectedTime = TimeOfDay.now();
+  final DateTime _selectedDate = DateTime.now();
+  final TimeOfDay _selectedTime = TimeOfDay.now();
 
   double get _factor {
     if (_unit == 'g') return _amount / 100;
@@ -228,9 +228,9 @@ class _FoodDetailSheetState extends State<FoodDetailSheet> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.2),
+        color: color.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.5)),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
       ),
       child: Text(
         text,

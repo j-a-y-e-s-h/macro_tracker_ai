@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../providers/ai_provider.dart';
+import '../../services/ai_service.dart';
 import '../../services/user_service.dart';
 
 class AICoachScreen extends ConsumerStatefulWidget {

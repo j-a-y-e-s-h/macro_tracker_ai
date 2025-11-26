@@ -113,7 +113,7 @@ class _WeightScreenState extends ConsumerState<WeightScreen> {
                             dotData: const FlDotData(show: true),
                             belowBarData: BarAreaData(
                               show: true,
-                              color: theme.colorScheme.secondary.withOpacity(0.2),
+                              color: theme.colorScheme.secondary.withValues(alpha: 0.2),
                             ),
                           ),
                         ],

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../services/user_service.dart';
-import '../onboarding/ultimate_onboarding_screen.dart';
-import '../main_navigation.dart';
 import '../../core/theme/app_theme.dart';
+import '../../services/user_service.dart';
+import '../../services/auth_service.dart';
+import '../main_navigation.dart';
+import '../auth/auth_screen.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -41,14 +42,39 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with SingleTickerPr
     await Future.delayed(const Duration(milliseconds: 2500));
     if (!mounted) return;
 
-    final user = ref.read(userServiceProvider);
-    
-    // Navigate to main app if user exists, otherwise to Ultimate Onboarding
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => user != null ? const MainNavigation() : const UltimateOnboardingScreen(),
-      ),
-    );
+    try {
+      final user = ref.read(userServiceProvider);
+      
+      if (user != null) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const MainNavigation()),
+        );
+        return;
+      }
+
+      // Check if logged in via Firebase but no local user data (e.g. fresh install)
+      // This might fail if Firebase isn't initialized on Windows
+      final authUser = ref.read(authServiceProvider).currentUser;
+      if (authUser != null) {
+        final success = await ref.read(userServiceProvider.notifier).loadFromFirestore(authUser.uid);
+        if (success && mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const MainNavigation()),
+          );
+          return;
+        }
+      }
+    } catch (e) {
+      debugPrint('Splash navigation error (likely Firebase not init): $e');
+      // Fallback to onboarding on error
+    }
+
+    // Default to Auth Screen (Login/Signup)
+    if (mounted) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const AuthScreen()),
+      );
+    }
   }
 
   @override
@@ -78,7 +104,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with SingleTickerPr
                     borderRadius: BorderRadius.circular(30),
                     boxShadow: [
                       BoxShadow(
-                        color: AppTheme.primary.withOpacity(0.5),
+                        color: AppTheme.primary.withValues(alpha: 0.5),
                         blurRadius: 30,
                         spreadRadius: 5,
                       ),

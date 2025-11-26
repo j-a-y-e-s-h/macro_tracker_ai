@@ -1,25 +1,38 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  // Ultimate "Midnight" Palette
-  static const Color black = Color(0xFF0F172A); // Slate 900 - Deep Background
-  static const Color surface = Color(0xFF1E293B); // Slate 800 - Card Surface
-  static const Color surfaceHighlight = Color(0xFF334155); // Slate 700 - Lighter Surface
+  // Ultimate "Midnight" Palette - Premium OLED
+  static const Color black = Color(0xFF000000); // True Black
+  static const Color surface = Color(0xFF121212); // Material Dark Surface
+  static const Color surfaceHighlight = Color(0xFF2C2C2C); // Lighter Grey
   
-  // "Neon" Accents
-  static const Color primary = Color(0xFF2DD4BF); // Teal 400 - Vibrant Primary
-  static const Color secondary = Color(0xFFF472B6); // Pink 400 - Vibrant Secondary
-  static const Color tertiary = Color(0xFFFB923C); // Orange 400 - Vibrant Tertiary
+  // "Neon" Accents - High Contrast
+  static const Color primary = Color(0xFF00E676); // Neon Green - Energetic
+  static const Color secondary = Color(0xFFD500F9); // Neon Purple - Playful
+  static const Color tertiary = Color(0xFFFF9100); // Neon Orange - Alert
   
   // Text Colors
-  static const Color textPrimary = Color(0xFFF8FAFC); // Slate 50
-  static const Color textSecondary = Color(0xFF94A3B8); // Slate 400
-  static const Color textDim = Color(0xFF64748B); // Slate 500
+  static const Color textPrimary = Color(0xFFFFFFFF); // Pure White
+  static const Color textSecondary = Color(0xFFB0B0B0); // Light Grey
+  static const Color textDim = Color(0xFF606060); // Dim Grey
 
-  // Macro Colors (Pastels for readability)
-  static const Color proteinColor = Color(0xFFA78BFA); // Violet 400
-  static const Color carbsColor = Color(0xFF60A5FA); // Blue 400
-  static const Color fatColor = Color(0xFFFBBF24); // Amber 400
+  // Macro Colors (Vibrant)
+  static const Color proteinColor = Color(0xFF7C4DFF); // Deep Purple
+  static const Color carbsColor = Color(0xFF448AFF); // Deep Blue
+  static const Color fatColor = Color(0xFFFFD740); // Deep Amber
+
+  // Gradients
+  static const LinearGradient primaryGradient = LinearGradient(
+    colors: [Color(0xFF00E676), Color(0xFF69F0AE)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+  
+  static const LinearGradient glassGradient = LinearGradient(
+    colors: [Color(0x1AFFFFFF), Color(0x0DFFFFFF)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
   
   static final darkTheme = ThemeData(
     useMaterial3: true,
@@ -32,10 +45,9 @@ class AppTheme {
       tertiary: tertiary,
       surface: surface,
       onSurface: textPrimary,
-      background: black,
     ),
     cardTheme: CardThemeData(
-      color: surface.withOpacity(0.8), // Glassmorphism base
+      color: surface.withValues(alpha: 0.8), // Glassmorphism base
       elevation: 0,
       margin: EdgeInsets.zero,
       shape: const RoundedRectangleBorder(

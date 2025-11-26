@@ -7,7 +7,6 @@ import '../../services/user_service.dart';
 import '../../services/food_log_service.dart';
 import '../../services/weight_service.dart';
 import '../../services/ai_service.dart';
-import '../../providers/ai_provider.dart';
 import '../../models/weight_log_model.dart';
 import 'package:uuid/uuid.dart';
 
@@ -123,12 +122,12 @@ class _StrategyScreenState extends ConsumerState<StrategyScreen> {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [AppTheme.primary.withOpacity(0.15), AppTheme.surface],
+          colors: [AppTheme.primary.withValues(alpha: 0.15), AppTheme.surface],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppTheme.primary.withOpacity(0.3)),
+        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -138,7 +137,7 @@ class _StrategyScreenState extends ConsumerState<StrategyScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: AppTheme.primary.withOpacity(0.2),
+                  color: AppTheme.primary.withValues(alpha: 0.2),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.analytics_outlined, color: AppTheme.primary),
@@ -228,13 +227,13 @@ class _StrategyScreenState extends ConsumerState<StrategyScreen> {
                     dotData: const FlDotData(show: true),
                     belowBarData: BarAreaData(
                       show: true,
-                      color: AppTheme.primary.withOpacity(0.1),
+                      color: AppTheme.primary.withValues(alpha: 0.1),
                     ),
                   ),
                   LineChartBarData(
                     spots: [const FlSpot(0, 0), FlSpot(6, user.tdee)], // Target line approximation
                     isCurved: false,
-                    color: AppTheme.textSecondary.withOpacity(0.5),
+                    color: AppTheme.textSecondary.withValues(alpha: 0.5),
                     barWidth: 2,
                     dashArray: [5, 5],
                     dotData: const FlDotData(show: false),

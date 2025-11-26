@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/app_theme.dart';
 import 'features/splash/splash_screen.dart';
 
+import 'package:firebase_core/firebase_core.dart';
 import 'package:openfoodfacts/openfoodfacts.dart';
+import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -13,14 +15,15 @@ void main() async {
     url: 'https://github.com/macromate', // Placeholder
   );
   
-  // Initialize Firebase if configured
-  // try {
-  //   await Firebase.initializeApp(
-  //     options: DefaultFirebaseOptions.currentPlatform,
-  //   );
-  // } catch (e) {
-  //   debugPrint('Firebase not initialized: $e');
-  // }
+  // Initialize Firebase
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    debugPrint('Firebase initialized successfully');
+  } catch (e) {
+    debugPrint('Firebase initialization failed: $e');
+  }
 
   runApp(const ProviderScope(child: MacroTrackerApp()));
 }

@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "791729577192",
+    "project_id": "macromate-f6c6d",
+    "storage_bucket": "macromate-f6c6d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:791729577192:android:1a20d225f5697a99653d5d",
+        "android_client_info": {
+          "package_name": "com.example.macro_tracker_ai"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "791729577192-g2g060p7uh332krmifsvc5mkgavsjj9u.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.macro_tracker_ai",
+            "certificate_hash": "a4f423a48ae49e3de6bcffc62b38d07573bc6a0f"
+          }
+        },
+        {
+          "client_id": "791729577192-vbisc4m0toslu7gu793t4ovpt2ptd597.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD_ieVLAP6fCzmV0wCmNvtkX2Wcsp94CVM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "791729577192-vbisc4m0toslu7gu793t4ovpt2ptd597.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "791729577192-u5og3in4h8im9hac7h56hs03bp1crbjj.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.macroTrackerAi"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
